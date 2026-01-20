@@ -1,74 +1,148 @@
-import { Image, StyleSheet, Platform } from 'react-native';
-
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, ScrollView, StyleSheet, RefreshControl, ActivityIndicator, StatusBar } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import { useAuth } from '@/context/AuthContext';
+import { api } from '@/services/api';
+import { PortfolioSummaryResponse, WalletLine } from '@/types/portfolio';
+import { DayGroup } from '@/types/transaction';
+import { PortfolioHeader } from '@/components/ui/PortfolioHeader';
+import { KycProgressCard } from '@/components/ui/KycProgressCard';
+import { TransactionList } from '@/components/ui/TransactionList';
 
 export default function HomeScreen() {
+  const { user, kycStatus, refreshKycStatus } = useAuth();
+
+  const [summary, setSummary] = useState<PortfolioSummaryResponse | null>(null);
+  const [xrpWallet, setXrpWallet] = useState<WalletLine | null>(null);
+  const [transactions, setTransactions] = useState<DayGroup[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showKycCard, setShowKycCard] = useState(true);
+
+  const loadData = useCallback(async (showLoader = true) => {
+    try {
+      if (showLoader) setIsLoading(true);
+
+      const [summaryRes, walletsRes, txRes] = await Promise.all([
+        api.portfolio.getSummary().catch(() => null),
+        api.portfolio.getWallets().catch(() => null),
+        api.transaction.getAll().catch(() => ({ days: [] })),
+      ]);
+
+      if (summaryRes) setSummary(summaryRes);
+      if (walletsRes?.wallets?.length) {
+        const xrp = walletsRes.wallets.find(w => w.asset === 'XRP');
+        if (xrp) setXrpWallet(xrp);
+      }
+      setTransactions(txRes.days || []);
+    } catch (error) {
+      console.error('Failed to load home data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Load on mount
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Refresh when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadData(false);
+      refreshKycStatus();
+    }, [loadData, refreshKycStatus])
+  );
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await Promise.all([loadData(false), refreshKycStatus()]);
+    setIsRefreshing(false);
+  };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.loadingContainer} edges={['top']}>
+        <StatusBar barStyle="light-content" backgroundColor="#000" />
+        <ActivityIndicator size="large" color="#6C5CE7" />
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.contentContainer}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor="#6C5CE7"
+            colors={['#6C5CE7']}
+          />
+        }
+      >
+        {/* Portfolio header with balance and actions */}
+        <PortfolioHeader
+          summary={summary}
+          xrpWallet={xrpWallet}
+          userTag={user?.xflowTag || undefined}
+          onSettingsPress={() => console.log('Settings')}
+          onSearchPress={() => console.log('Search')}
+          onAddFundsPress={() => console.log('Add Funds')}
+          onSendPress={() => router.push('/(send)')}
+          onReceivePress={() => console.log('Receive')}
+          onRequestPress={() => console.log('Request')}
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12'
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+
+        {/* KYC progress card (shown if not fully verified) */}
+        {kycStatus && showKycCard && kycStatus.kycTier !== 'LEVEL1' && (
+          <View style={styles.section}>
+            <KycProgressCard
+              kycStatus={kycStatus}
+              onDismiss={() => setShowKycCard(false)}
+            />
+          </View>
+        )}
+
+        {/* Transactions list */}
+        <View style={styles.section}>
+          <TransactionList
+            days={transactions}
+            initialCollapsed={false}
+            maxVisibleDays={5}
+          />
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  container: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  contentContainer: {
+    flexGrow: 1,
+    paddingBottom: 24,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
+    backgroundColor: '#000',
   },
-  stepContainer: {
-    gap: 8,
+  section: {
+    paddingHorizontal: 16,
     marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
   },
 });

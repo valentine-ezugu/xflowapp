@@ -50,18 +50,6 @@ export default function TabLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="card"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="recipients"
-        options={{
-          href: null,
-        }}
-      />
     </Tabs>
   );
 }
