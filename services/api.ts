@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import {
   AuthResponse,
   RegisterRequest,
@@ -41,10 +42,24 @@ import {
   DeclineRequestData,
 } from '@/types/payment';
 
-// Configuration
-const API_BASE_URL = __DEV__
-  ? 'http://10.0.2.2:8080/api/v1' // Android emulator localhost
-  : 'https://api.xflow.com/api/v1'; // Production URL (update this)
+// Configuration - determine API URL based on platform and environment
+const getApiBaseUrl = (): string => {
+  if (!__DEV__) {
+    return 'https://api.xflow.com/api/v1'; // Production URL
+  }
+
+  // Development URLs by platform
+  if (Platform.OS === 'web') {
+    return 'http://localhost:8080/api/v1';
+  } else if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:8080/api/v1'; // Android emulator localhost
+  } else {
+    // iOS - use your computer's local IP address
+    return 'http://10.202.230.28:8080/api/v1';
+  }
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Token storage keys
 const ACCESS_TOKEN_KEY = 'xflow_access_token';
