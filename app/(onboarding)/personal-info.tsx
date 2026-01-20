@@ -28,6 +28,7 @@ export default function PersonalInfoScreen() {
 
   const [countries, setCountries] = useState<CountryDto[]>([]);
   const [countriesLoading, setCountriesLoading] = useState(true);
+  const [dateError, setDateError] = useState<string | null>(null);
 
   useEffect(() => {
     loadCountries();
@@ -44,10 +45,42 @@ export default function PersonalInfoScreen() {
     }
   };
 
+  // Validate date of birth (YYYY-MM-DD format)
+  const validateDate = (dateStr: string): boolean => {
+    if (!dateStr || dateStr.length !== 10) return false;
+
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return false;
+
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    const day = parseInt(parts[2], 10);
+
+    // Check valid ranges
+    if (isNaN(year) || isNaN(month) || isNaN(day)) return false;
+    if (month < 1 || month > 12) return false;
+    if (day < 1 || day > 31) return false;
+
+    // Check year is reasonable (between 1900 and current year - 18)
+    const currentYear = new Date().getFullYear();
+    if (year < 1900 || year > currentYear - 18) return false;
+
+    // Validate actual date (handles leap years, days per month)
+    const date = new Date(year, month - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+      return false;
+    }
+
+    return true;
+  };
+
+  const isDateValid = validateDate(dateOfBirth);
+
   const isFormValid =
     firstName.trim() &&
     lastName.trim() &&
     dateOfBirth.trim() &&
+    isDateValid &&
     countryOfResidence &&
     nationality;
 
@@ -69,6 +102,8 @@ export default function PersonalInfoScreen() {
 
   const handleDateChange = (text: string) => {
     clearError();
+    setDateError(null);
+
     const cleaned = text.replace(/\D/g, '');
     let formatted = cleaned;
 
@@ -80,6 +115,29 @@ export default function PersonalInfoScreen() {
     }
 
     setDateOfBirth(formatted);
+
+    // Validate when complete
+    if (formatted.length === 10) {
+      const parts = formatted.split('-');
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10);
+      const day = parseInt(parts[2], 10);
+      const currentYear = new Date().getFullYear();
+
+      if (month < 1 || month > 12) {
+        setDateError('Invalid month (1-12)');
+      } else if (day < 1 || day > 31) {
+        setDateError('Invalid day (1-31)');
+      } else if (year < 1900 || year > currentYear - 18) {
+        setDateError(`Year must be between 1900 and ${currentYear - 18}`);
+      } else {
+        // Validate actual date
+        const date = new Date(year, month - 1, day);
+        if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+          setDateError('Invalid date');
+        }
+      }
+    }
   };
 
   return (
@@ -143,7 +201,7 @@ export default function PersonalInfoScreen() {
 
               <Text style={styles.label}>Date of Birth</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, dateError && styles.inputError]}
                 placeholder="YYYY-MM-DD"
                 placeholderTextColor="#666"
                 value={dateOfBirth}
@@ -151,6 +209,7 @@ export default function PersonalInfoScreen() {
                 keyboardType="number-pad"
                 maxLength={10}
               />
+              {dateError && <Text style={styles.fieldError}>{dateError}</Text>}
 
               {countriesLoading ? (
                 <View style={styles.loadingContainer}>
@@ -286,6 +345,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     backgroundColor: '#111',
     marginBottom: 16,
+  },
+  inputError: {
+    borderColor: '#FF6B6B',
+    marginBottom: 4,
+  },
+  fieldError: {
+    color: '#FF6B6B',
+    fontSize: 12,
+    marginBottom: 12,
   },
   loadingContainer: {
     flexDirection: 'row',

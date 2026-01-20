@@ -604,10 +604,9 @@ export const paymentApi = {
 export const countryApi = {
   /**
    * Get all countries with details (code, name, dialCode, flag)
-   * No auth required
    */
   async getCountries(): Promise<CountryDto[]> {
-    return fetchWithAuth<CountryDto[]>('/countries/details', {}, false);
+    return fetchWithAuth<CountryDto[]>('/countries/details');
   },
 };
 
