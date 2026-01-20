@@ -173,15 +173,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setIsLoading(true);
     setError(null);
     try {
+      console.log('[Auth] Verifying OTP...');
       const authResponse = isRegistration
         ? await api.auth.verifyRegistration(data)
         : await api.auth.verifyLogin(data);
 
+      console.log('[Auth] OTP verified, tokens received');
+
       // Fetch user profile and KYC status
-      const [user, kycStatus] = await Promise.all([
-        api.user.getProfile(),
-        api.kyc.getStatus(),
-      ]);
+      console.log('[Auth] Fetching profile and KYC status...');
+      let user: UserProfile;
+      let kycStatus: KycStatusResponse;
+
+      try {
+        user = await api.user.getProfile();
+        console.log('[Auth] Profile fetched:', user);
+      } catch (profileErr) {
+        console.error('[Auth] Failed to fetch profile:', profileErr);
+        throw profileErr;
+      }
+
+      try {
+        kycStatus = await api.kyc.getStatus();
+        console.log('[Auth] KYC status fetched:', kycStatus);
+      } catch (kycErr) {
+        console.error('[Auth] Failed to fetch KYC status:', kycErr);
+        throw kycErr;
+      }
 
       setState({
         status: 'authenticated',
@@ -203,6 +221,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         router.replace('/(tabs)');
       }
     } catch (err) {
+      console.error('[Auth] Verification error:', err);
       const message = err instanceof ApiError ? err.message : 'Verification failed';
       setError(message);
       throw err;

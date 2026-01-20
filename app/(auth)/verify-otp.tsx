@@ -9,10 +9,12 @@ import {
   Platform,
   ActivityIndicator,
   StatusBar,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
+import { api } from '@/services/api';
 
 const OTP_LENGTH = 6;
 
@@ -88,9 +90,30 @@ export default function VerifyOtpScreen() {
     }
   };
 
+  const [isResending, setIsResending] = useState(false);
+
   const goBack = () => {
     clearError();
-    router.back();
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(auth)/login');
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (isResending) return;
+
+    setIsResending(true);
+    clearError();
+    try {
+      await api.auth.resendOtp(phoneNumber);
+      Alert.alert('Code Sent', 'A new verification code has been sent to your phone.');
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to resend code');
+    } finally {
+      setIsResending(false);
+    }
   };
 
   const otpValue = otp.join('');
@@ -151,8 +174,12 @@ export default function VerifyOtpScreen() {
 
           <View style={styles.resendContainer}>
             <Text style={styles.resendText}>Didn't receive the code? </Text>
-            <TouchableOpacity onPress={goBack}>
-              <Text style={styles.resendLink}>Resend</Text>
+            <TouchableOpacity onPress={handleResendOtp} disabled={isResending}>
+              {isResending ? (
+                <ActivityIndicator size="small" color="#00D4AA" />
+              ) : (
+                <Text style={styles.resendLink}>Resend</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>

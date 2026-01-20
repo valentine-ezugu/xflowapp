@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
+import { CountryPicker } from '@/components/ui/CountryPicker';
+import { CountryDto } from '@/types/auth';
+import { api } from '@/services/api';
 
 export default function PersonalInfoScreen() {
   const { savePersonalInfo, isLoading, error, clearError } = useAuth();
@@ -20,26 +23,44 @@ export default function PersonalInfoScreen() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
-  const [countryOfResidence, setCountryOfResidence] = useState('');
-  const [nationality, setNationality] = useState('');
+  const [countryOfResidence, setCountryOfResidence] = useState<CountryDto | null>(null);
+  const [nationality, setNationality] = useState<CountryDto | null>(null);
+
+  const [countries, setCountries] = useState<CountryDto[]>([]);
+  const [countriesLoading, setCountriesLoading] = useState(true);
+
+  useEffect(() => {
+    loadCountries();
+  }, []);
+
+  const loadCountries = async () => {
+    try {
+      const data = await api.country.getCountries();
+      setCountries(data);
+    } catch (err) {
+      console.error('Failed to load countries:', err);
+    } finally {
+      setCountriesLoading(false);
+    }
+  };
 
   const isFormValid =
     firstName.trim() &&
     lastName.trim() &&
     dateOfBirth.trim() &&
-    countryOfResidence.trim() &&
-    nationality.trim();
+    countryOfResidence &&
+    nationality;
 
   const handleSubmit = async () => {
-    if (!isFormValid) return;
+    if (!isFormValid || !countryOfResidence || !nationality) return;
 
     try {
       await savePersonalInfo({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         dateOfBirth: dateOfBirth.trim(),
-        countryOfResidence: countryOfResidence.trim().toUpperCase(),
-        nationality: nationality.trim().toUpperCase(),
+        countryOfResidence: countryOfResidence.name,
+        nationality: nationality.name,
       });
     } catch (err) {
       // Error handled by context
@@ -131,40 +152,43 @@ export default function PersonalInfoScreen() {
                 maxLength={10}
               />
 
-              <Text style={styles.label}>Country of Residence</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="US, PL, NG..."
-                placeholderTextColor="#666"
-                value={countryOfResidence}
-                onChangeText={(text) => {
-                  clearError();
-                  setCountryOfResidence(text);
-                }}
-                autoCapitalize="characters"
-                maxLength={2}
-              />
+              {countriesLoading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color="#00D4AA" />
+                  <Text style={styles.loadingText}>Loading countries...</Text>
+                </View>
+              ) : (
+                <>
+                  <CountryPicker
+                    label="Country of Residence"
+                    placeholder="Select your country"
+                    value={countryOfResidence}
+                    countries={countries}
+                    onSelect={(country) => {
+                      clearError();
+                      setCountryOfResidence(country);
+                    }}
+                  />
 
-              <Text style={styles.label}>Nationality</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="US, PL, NG..."
-                placeholderTextColor="#666"
-                value={nationality}
-                onChangeText={(text) => {
-                  clearError();
-                  setNationality(text);
-                }}
-                autoCapitalize="characters"
-                maxLength={2}
-              />
+                  <CountryPicker
+                    label="Nationality"
+                    placeholder="Select your nationality"
+                    value={nationality}
+                    countries={countries}
+                    onSelect={(country) => {
+                      clearError();
+                      setNationality(country);
+                    }}
+                  />
+                </>
+              )}
 
               {error && <Text style={styles.error}>{error}</Text>}
 
               <TouchableOpacity
-                style={[styles.button, (!isFormValid || isLoading) && styles.buttonDisabled]}
+                style={[styles.button, (!isFormValid || isLoading || countriesLoading) && styles.buttonDisabled]}
                 onPress={handleSubmit}
-                disabled={!isFormValid || isLoading}
+                disabled={!isFormValid || isLoading || countriesLoading}
               >
                 {isLoading ? (
                   <ActivityIndicator color="#000" />
@@ -262,6 +286,17 @@ const styles = StyleSheet.create({
     color: '#fff',
     backgroundColor: '#111',
     marginBottom: 16,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 8,
+  },
+  loadingText: {
+    color: '#888',
+    fontSize: 14,
   },
   error: {
     color: '#FF6B6B',

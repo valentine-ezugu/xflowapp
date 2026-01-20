@@ -12,6 +12,7 @@ import {
   SaveAddressRequest,
   AddressResponse,
   KycVerifyResponse,
+  CountryDto,
 } from '@/types/auth';
 import {
   PortfolioSummaryResponse,
@@ -65,10 +66,13 @@ const API_BASE_URL = getApiBaseUrl();
 const ACCESS_TOKEN_KEY = 'xflow_access_token';
 const REFRESH_TOKEN_KEY = 'xflow_refresh_token';
 
-// Token storage helpers
+// Token storage helpers - use SecureStore on native, localStorage on web
 export const tokenStorage = {
   async getAccessToken(): Promise<string | null> {
     try {
+      if (Platform.OS === 'web') {
+        return localStorage.getItem(ACCESS_TOKEN_KEY);
+      }
       return await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
     } catch {
       return null;
@@ -77,6 +81,9 @@ export const tokenStorage = {
 
   async getRefreshToken(): Promise<string | null> {
     try {
+      if (Platform.OS === 'web') {
+        return localStorage.getItem(REFRESH_TOKEN_KEY);
+      }
       return await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
     } catch {
       return null;
@@ -84,13 +91,30 @@ export const tokenStorage = {
   },
 
   async setTokens(accessToken: string, refreshToken: string): Promise<void> {
-    await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, accessToken);
-    await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
+    try {
+      console.log('[TokenStorage] Setting tokens...');
+      if (Platform.OS === 'web') {
+        localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+        localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+      } else {
+        await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, accessToken);
+        await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
+      }
+      console.log('[TokenStorage] Tokens set successfully');
+    } catch (err) {
+      console.error('[TokenStorage] Failed to set tokens:', err);
+      throw err;
+    }
   },
 
   async clearTokens(): Promise<void> {
-    await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
-    await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+    if (Platform.OS === 'web') {
+      localStorage.removeItem(ACCESS_TOKEN_KEY);
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+    } else {
+      await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
+      await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+    }
   },
 };
 
@@ -240,13 +264,18 @@ export const authApi = {
    * Verify registration OTP - returns tokens
    */
   async verifyRegistration(data: VerifyOtpRequest): Promise<AuthResponse> {
+    console.log('[API] verifyRegistration called');
     const response = await fetchWithAuth<AuthResponse>('/auth/register/verify', {
       method: 'POST',
       body: JSON.stringify(data),
     }, false);
 
+    console.log('[API] verifyRegistration response:', response);
+
     // Store tokens
+    console.log('[API] Storing tokens...');
     await tokenStorage.setTokens(response.accessToken, response.refreshToken);
+    console.log('[API] Tokens stored');
     return response;
   },
 
@@ -261,16 +290,31 @@ export const authApi = {
   },
 
   /**
+   * Resend OTP to phone number
+   */
+  async resendOtp(phoneNumber: string): Promise<string> {
+    return fetchWithAuth<string>('/auth/resend-otp', {
+      method: 'POST',
+      body: JSON.stringify({ phoneNumber }),
+    }, false);
+  },
+
+  /**
    * Verify login OTP - returns tokens
    */
   async verifyLogin(data: VerifyOtpRequest): Promise<AuthResponse> {
+    console.log('[API] verifyLogin called');
     const response = await fetchWithAuth<AuthResponse>('/auth/login/verify', {
       method: 'POST',
       body: JSON.stringify(data),
     }, false);
 
+    console.log('[API] verifyLogin response:', response);
+
     // Store tokens
+    console.log('[API] Storing tokens...');
     await tokenStorage.setTokens(response.accessToken, response.refreshToken);
+    console.log('[API] Tokens stored');
     return response;
   },
 
@@ -555,6 +599,18 @@ export const paymentApi = {
   },
 };
 
+// ============ COUNTRY API ============
+
+export const countryApi = {
+  /**
+   * Get all countries with details (code, name, dialCode, flag)
+   * No auth required
+   */
+  async getCountries(): Promise<CountryDto[]> {
+    return fetchWithAuth<CountryDto[]>('/countries/details', {}, false);
+  },
+};
+
 // ============ EXPORT ALL ============
 
 export const api = {
@@ -565,6 +621,7 @@ export const api = {
   transaction: transactionApi,
   transfer: transferApi,
   payment: paymentApi,
+  country: countryApi,
 };
 
 export default api;

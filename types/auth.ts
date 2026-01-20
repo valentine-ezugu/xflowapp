@@ -1,5 +1,13 @@
 // Auth request/response types matching backend DTOs
 
+// Country types
+export interface CountryDto {
+  code: string;      // ISO-2 code: "PL", "NG", "US"
+  name: string;      // Full name: "Poland", "Nigeria", "United States"
+  dialCode: string;  // Phone dial code: "+48", "+234", "+1"
+  flag: string;      // Flag emoji: "🇵🇱", "🇳🇬", "🇺🇸"
+}
+
 export interface RegisterRequest {
   phoneNumber: string;
   email: string;
