@@ -46,7 +46,7 @@ import {
 
 // API Configuration
 // Set to true to use localhost, false to use dev server
-const USE_LOCALHOST = false;
+const USE_LOCALHOST = true;
 
 const getApiBaseUrl = (): string => {
   if (!__DEV__) {

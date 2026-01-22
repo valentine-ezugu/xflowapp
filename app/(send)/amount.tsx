@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '@/services/api';
 import { SendPreviewResponse } from '@/types/transfer';
@@ -44,6 +45,26 @@ export default function SendAmountScreen() {
   const isExternalWallet = params.type === 'external';
   const recipientName = params.displayName || 'Unknown';
 
+  // Refresh balance when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      // Fetch a minimal preview to get current balance/rate
+      const fetchBalance = async () => {
+        try {
+          const response = await api.transfer.getPreview({
+            recipientTag: isExternalWallet ? undefined : params.xflowTag,
+            destinationAddress: isExternalWallet ? params.address : undefined,
+            xrpAmount: 0.0001, // minimal amount just to get balance/rate
+          });
+          setPreview(response);
+        } catch (error) {
+          console.error('Failed to fetch balance:', error);
+        }
+      };
+      fetchBalance();
+    }, [isExternalWallet, params.xflowTag, params.address])
+  );
+
   // Get preview when amount changes
   useEffect(() => {
     const numAmount = parseFloat(amount.replace(',', '.')) || 0;
@@ -74,22 +95,6 @@ export default function SendAmountScreen() {
     return () => clearTimeout(timer);
   }, [amount, inputMode, params.xflowTag, params.address, isExternalWallet]);
 
-  // Initial preview to get exchange rate and balance
-  useEffect(() => {
-    const getInitialRate = async () => {
-      try {
-        const response = await api.transfer.getPreview({
-          recipientTag: isExternalWallet ? undefined : params.xflowTag,
-          destinationAddress: isExternalWallet ? params.address : undefined,
-          xrpAmount: 1, // Small amount just to get rate and balance
-        });
-        setPreview(response);
-      } catch (error) {
-        console.error('Failed to get initial rate:', error);
-      }
-    };
-    getInitialRate();
-  }, []);
 
   const handleKeyPress = (key: string) => {
     if (key === 'backspace') {
