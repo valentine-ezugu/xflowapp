@@ -19,19 +19,19 @@ export function KycProgressCard({ kycStatus, onDismiss }: KycProgressCardProps) 
     {
       key: 'PROFILE',
       title: 'Profile created',
-      subtitle: 'Boom! You\'re in.',
+      subtitle: 'Your account is live',
       route: '/(onboarding)/personal-info',
     },
     {
       key: 'ADDRESS',
-      title: 'Continue verification',
-      subtitle: 'Unlock all account features.',
+      title: 'Complete Verification',
+      subtitle: 'Required to unlock features',
       route: '/(onboarding)/address',
     },
     {
       key: 'VERIFICATION',
-      title: 'Activate portfolio',
-      subtitle: 'Verify your identity.',
+      title: 'Activate transfers',
+      subtitle: 'Verify your identity',
       route: '/(onboarding)/verify-identity',
     },
   ];
@@ -55,15 +55,16 @@ export function KycProgressCard({ kycStatus, onDismiss }: KycProgressCardProps) 
   const progress = (completedSteps / steps.length) * 100;
 
   const handleStepPress = (index: number) => {
-    if (index <= currentStepIndex) {
-      router.push(steps[Math.min(index, currentStepIndex)].route as any);
+    // Only allow pressing the current step, not completed or locked steps
+    if (index === currentStepIndex) {
+      router.push(steps[index].route as any);
     }
   };
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Get ready to trade</Text>
+        <Text style={styles.headerTitle}>Activate your account</Text>
         {onDismiss && (
           <TouchableOpacity onPress={onDismiss} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Ionicons name="close" size={20} color="#666" />
@@ -88,7 +89,7 @@ export function KycProgressCard({ kycStatus, onDismiss }: KycProgressCardProps) 
               key={step.key}
               style={styles.stepItem}
               onPress={() => handleStepPress(index)}
-              disabled={isLocked}
+              disabled={isCompleted || isLocked}
             >
               <View style={styles.stepLeft}>
                 <View style={[

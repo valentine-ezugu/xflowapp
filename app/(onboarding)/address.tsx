@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
+import { CountryPicker } from '@/components/ui/CountryPicker';
+import { CountryDto } from '@/types/auth';
+import { api } from '@/services/api';
 
 export default function AddressScreen() {
   const { saveAddress, isLoading, error, clearError } = useAuth();
@@ -22,16 +25,34 @@ export default function AddressScreen() {
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [postalCode, setPostalCode] = useState('');
-  const [country, setCountry] = useState('');
+  const [country, setCountry] = useState<CountryDto | null>(null);
+
+  const [countries, setCountries] = useState<CountryDto[]>([]);
+  const [countriesLoading, setCountriesLoading] = useState(true);
+
+  useEffect(() => {
+    loadCountries();
+  }, []);
+
+  const loadCountries = async () => {
+    try {
+      const data = await api.country.getCountries();
+      setCountries(data);
+    } catch (err) {
+      console.error('Failed to load countries:', err);
+    } finally {
+      setCountriesLoading(false);
+    }
+  };
 
   const isFormValid =
     street.trim() &&
     city.trim() &&
     postalCode.trim() &&
-    country.trim();
+    country;
 
   const handleSubmit = async () => {
-    if (!isFormValid) return;
+    if (!isFormValid || !country) return;
 
     try {
       await saveAddress({
@@ -40,7 +61,7 @@ export default function AddressScreen() {
         city: city.trim(),
         state: state.trim() || undefined,
         postalCode: postalCode.trim(),
-        country: country.trim().toUpperCase(),
+        country: country.name,
       });
     } catch (err) {
       // Error handled by context
@@ -78,7 +99,6 @@ export default function AddressScreen() {
               <Text style={styles.label}>Street Address</Text>
               <TextInput
                 style={styles.input}
-                placeholder="123 Main Street"
                 placeholderTextColor="#666"
                 value={street}
                 onChangeText={(text) => {
@@ -88,10 +108,9 @@ export default function AddressScreen() {
                 autoCapitalize="words"
               />
 
-              <Text style={styles.label}>Apartment, Suite, etc. (optional)</Text>
+              <Text style={styles.label}>Apartment (optional)</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Apt 4B"
                 placeholderTextColor="#666"
                 value={street2}
                 onChangeText={(text) => {
@@ -106,7 +125,6 @@ export default function AddressScreen() {
                   <Text style={styles.label}>City</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="New York"
                     placeholderTextColor="#666"
                     value={city}
                     onChangeText={(text) => {
@@ -120,7 +138,6 @@ export default function AddressScreen() {
                   <Text style={styles.label}>State (optional)</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="NY"
                     placeholderTextColor="#666"
                     value={state}
                     onChangeText={(text) => {
@@ -137,7 +154,6 @@ export default function AddressScreen() {
                   <Text style={styles.label}>Postal Code</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="10001"
                     placeholderTextColor="#666"
                     value={postalCode}
                     onChangeText={(text) => {
@@ -148,28 +164,31 @@ export default function AddressScreen() {
                   />
                 </View>
                 <View style={styles.halfInput}>
-                  <Text style={styles.label}>Country</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="US"
-                    placeholderTextColor="#666"
-                    value={country}
-                    onChangeText={(text) => {
-                      clearError();
-                      setCountry(text);
-                    }}
-                    autoCapitalize="characters"
-                    maxLength={2}
-                  />
+                  {countriesLoading ? (
+                    <View style={styles.loadingContainer}>
+                      <ActivityIndicator size="small" color="#00D4AA" />
+                    </View>
+                  ) : (
+                    <CountryPicker
+                      label="Country"
+                      placeholder="Select"
+                      value={country}
+                      countries={countries}
+                      onSelect={(selected) => {
+                        clearError();
+                        setCountry(selected);
+                      }}
+                    />
+                  )}
                 </View>
               </View>
 
               {error && <Text style={styles.error}>{error}</Text>}
 
               <TouchableOpacity
-                style={[styles.button, (!isFormValid || isLoading) && styles.buttonDisabled]}
+                style={[styles.button, (!isFormValid || isLoading || countriesLoading) && styles.buttonDisabled]}
                 onPress={handleSubmit}
-                disabled={!isFormValid || isLoading}
+                disabled={!isFormValid || isLoading || countriesLoading}
               >
                 {isLoading ? (
                   <ActivityIndicator color="#000" />
@@ -272,6 +291,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
     backgroundColor: '#111',
+    marginBottom: 16,
+  },
+  loadingContainer: {
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 16,
   },
   error: {

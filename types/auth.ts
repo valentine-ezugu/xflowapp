@@ -67,7 +67,8 @@ export interface KycVerifyResponse {
   action: string;
   status: string;
   kycCaseId: number;
-  hostedUrl: string;
+  hostedUrl: string | null;  // Deprecated - always null
+  accessToken: string;       // Sumsub SDK access token
   currentTier: string | null;
 }
 
@@ -81,6 +82,8 @@ export interface UserProfile {
   verified: boolean;
   dateOfBirth: string | null;
   xflowTag: string | null;
+  defaultCurrency: string | null; // User's fiat currency (EUR, USD, PLN, etc.) - set during onboarding
+  countryOfResidence: string | null;
 }
 
 export interface AddressResponse {

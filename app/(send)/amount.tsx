@@ -14,6 +14,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '@/services/api';
 import { SendPreviewResponse } from '@/types/transfer';
+import { useAuth } from '@/context/AuthContext';
 
 const NUMBER_PAD = [
   ['1', '2', '3'],
@@ -25,10 +26,11 @@ const NUMBER_PAD = [
 type InputMode = 'fiat' | 'xrp';
 
 export default function SendAmountScreen() {
+  const { user } = useAuth();
   const params = useLocalSearchParams<{
-    type: string;
-    recipientId: string;
-    address: string;
+    type: string; // 'user' or 'external'
+    xflowTag?: string; // For user transfers
+    address?: string; // For external transfers
     displayName: string;
   }>();
 
@@ -39,7 +41,7 @@ export default function SendAmountScreen() {
   const [note, setNote] = useState('');
   const [destinationTag, setDestinationTag] = useState('');
 
-  const isExternalWallet = params.type === 'wallet';
+  const isExternalWallet = params.type === 'external';
   const recipientName = params.displayName || 'Unknown';
 
   // Get preview when amount changes
@@ -55,7 +57,7 @@ export default function SendAmountScreen() {
       try {
         // Send either fiatAmount or xrpAmount based on input mode
         const response = await api.transfer.getPreview({
-          recipientTag: isExternalWallet ? undefined : params.recipientId,
+          recipientTag: isExternalWallet ? undefined : params.xflowTag,
           destinationAddress: isExternalWallet ? params.address : undefined,
           xrpAmount: inputMode === 'xrp' ? numAmount : undefined,
           fiatAmount: inputMode === 'fiat' ? numAmount : undefined,
@@ -70,14 +72,14 @@ export default function SendAmountScreen() {
 
     const timer = setTimeout(fetchPreview, 300);
     return () => clearTimeout(timer);
-  }, [amount, inputMode, params.recipientId, params.address, isExternalWallet]);
+  }, [amount, inputMode, params.xflowTag, params.address, isExternalWallet]);
 
   // Initial preview to get exchange rate and balance
   useEffect(() => {
     const getInitialRate = async () => {
       try {
         const response = await api.transfer.getPreview({
-          recipientTag: isExternalWallet ? undefined : params.recipientId,
+          recipientTag: isExternalWallet ? undefined : params.xflowTag,
           destinationAddress: isExternalWallet ? params.address : undefined,
           xrpAmount: 1, // Small amount just to get rate and balance
         });
@@ -158,7 +160,7 @@ export default function SendAmountScreen() {
       pathname: '/(send)/confirm',
       params: {
         type: params.type,
-        recipientTag: params.recipientId || '',
+        recipientTag: params.xflowTag || '',
         address: params.address || '',
         displayName: recipientName,
         xrpAmount: preview.totalXrp.toString(),
@@ -179,15 +181,28 @@ export default function SendAmountScreen() {
   };
 
   const getCurrencySymbol = (currency: string) => {
-    switch (currency) {
-      case 'EUR': return '€';
-      case 'USD': return '$';
-      case 'GBP': return '£';
-      default: return currency;
-    }
+    const symbols: Record<string, string> = {
+      EUR: '€',
+      USD: '$',
+      GBP: '£',
+      PLN: 'zł',
+      NGN: '₦',
+      JPY: '¥',
+      CNY: '¥',
+      INR: '₹',
+      KRW: '₩',
+      BRL: 'R$',
+      CHF: 'CHF',
+      AUD: 'A$',
+      CAD: 'C$',
+      MXN: 'MX$',
+      ZAR: 'R',
+    };
+    return symbols[currency] || currency;
   };
 
-  const fiatCurrency = preview?.fiatCurrency || 'EUR';
+  // Use preview currency when available, fall back to user's default currency
+  const fiatCurrency = preview?.fiatCurrency || user?.defaultCurrency || 'EUR';
   const currencySymbol = getCurrencySymbol(fiatCurrency);
   const canContinue = preview && preview.totalXrp > 0 && preview.totalXrp <= preview.spendableXrp;
 

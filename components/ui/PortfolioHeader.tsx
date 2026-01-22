@@ -93,7 +93,7 @@ export function PortfolioHeader({
       <View style={styles.buttonRow}>
         <TouchableOpacity style={styles.primaryButton} onPress={onAddFundsPress}>
           <Ionicons name="add" size={18} color="#000" />
-          <Text style={styles.primaryButtonText}>Add</Text>
+          <Text style={styles.primaryButtonText}>Add Funds</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.primaryButton} onPress={onSendPress}>
           <Ionicons name="arrow-up" size={18} color="#000" />

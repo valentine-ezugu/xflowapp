@@ -276,13 +276,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [refreshKycStatus]);
 
-  // Start ID verification (KYC Step 3)
+  // Start ID verification (KYC Step 3) - returns Sumsub SDK access token
   const startVerification = useCallback(async (): Promise<string> => {
     setIsLoading(true);
     setError(null);
     try {
       const response = await api.kyc.startVerification();
-      return response.hostedUrl;
+      return response.accessToken;
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Failed to start verification';
       setError(message);

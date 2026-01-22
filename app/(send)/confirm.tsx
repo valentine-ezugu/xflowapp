@@ -33,21 +33,32 @@ export default function ConfirmSendScreen() {
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isExternal = params.type === 'wallet';
-  const xrpAmount = parseFloat(params.xrpAmount) || 0;
-  const fiatAmount = parseFloat(params.fiatAmount) || 0;
+  const isExternal = params.type === 'external';
+  const xrpAmount = parseFloat(params.xrpAmount) || 0; // Total XRP being sent (used for API call)
   const feeXrp = parseFloat(params.feeXrp) || 0;
   const feeFiat = parseFloat(params.feeFiat) || 0;
   const recipientGetsXrp = parseFloat(params.recipientGetsXrp) || 0;
   const recipientGetsFiat = parseFloat(params.recipientGetsFiat) || 0;
 
   const getCurrencySymbol = (currency: string) => {
-    switch (currency) {
-      case 'EUR': return '€';
-      case 'USD': return '$';
-      case 'GBP': return '£';
-      default: return currency;
-    }
+    const symbols: Record<string, string> = {
+      EUR: '€',
+      USD: '$',
+      GBP: '£',
+      PLN: 'zł',
+      NGN: '₦',
+      JPY: '¥',
+      CNY: '¥',
+      INR: '₹',
+      KRW: '₩',
+      BRL: 'R$',
+      CHF: 'CHF',
+      AUD: 'A$',
+      CAD: 'C$',
+      MXN: 'MX$',
+      ZAR: 'R',
+    };
+    return symbols[currency] || currency;
   };
 
   const currencySymbol = getCurrencySymbol(params.fiatCurrency || 'EUR');
@@ -112,15 +123,20 @@ export default function ConfirmSendScreen() {
         <View style={styles.placeholder} />
       </View>
 
-      {/* Amount display */}
+      {/* Amount display - show what recipient gets */}
       <View style={styles.amountSection}>
-        <Text style={styles.amountLabel}>You're sending</Text>
+        <Text style={styles.amountLabel}>Recipient gets</Text>
         <Text style={styles.amountValue}>
-          {currencySymbol}{fiatAmount.toFixed(2)}
+          {currencySymbol}{recipientGetsFiat.toFixed(2)}
         </Text>
-        <Text style={styles.amountXrp}>
-          {xrpAmount.toFixed(4)} XRP
-        </Text>
+        <View style={styles.xrpRow}>
+          <View style={styles.xrpBadge}>
+            <Text style={styles.xrpIcon}>✕</Text>
+          </View>
+          <Text style={styles.amountXrp}>
+            {recipientGetsXrp.toFixed(4)} XRP
+          </Text>
+        </View>
       </View>
 
       {/* Recipient */}
@@ -148,7 +164,7 @@ export default function ConfirmSendScreen() {
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Total fee</Text>
             <Text style={styles.detailValue}>
-              {'< '}{currencySymbol}{feeFiat < 0.01 ? '0.01' : feeFiat.toFixed(2)}
+              {feeXrp.toFixed(4)} XRP ({currencySymbol}{feeFiat.toFixed(2)})
             </Text>
           </View>
         )}
@@ -232,10 +248,28 @@ const styles = StyleSheet.create({
     color: '#fff',
     letterSpacing: -1,
   },
+  xrpRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 6,
+  },
+  xrpBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#333',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  xrpIcon: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#fff',
+  },
   amountXrp: {
     fontSize: 16,
     color: '#888',
-    marginTop: 4,
   },
   detailsCard: {
     marginHorizontal: 16,

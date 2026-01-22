@@ -96,7 +96,7 @@ export default function HomeScreen() {
           onSearchPress={() => console.log('Search')}
           onAddFundsPress={() => console.log('Add Funds')}
           onSendPress={() => router.push('/(send)')}
-          onReceivePress={() => console.log('Receive')}
+          onReceivePress={() => router.push('/(receive)')}
           onRequestPress={() => console.log('Request')}
         />
 

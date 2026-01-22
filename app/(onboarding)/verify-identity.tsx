@@ -6,25 +6,79 @@ import {
   StyleSheet,
   ActivityIndicator,
   StatusBar,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
+
+// Sumsub SDK - only available on native platforms
+let SNSMobileSDK: any = null;
+if (Platform.OS !== 'web') {
+  try {
+    SNSMobileSDK = require('@sumsub/react-native-mobilesdk-module').default;
+  } catch (e) {
+    console.warn('Sumsub SDK not available:', e);
+  }
+}
 
 export default function VerifyIdentityScreen() {
   const { startVerification, refreshKycStatus, isLoading, error, clearError } = useAuth();
 
-  const [verificationUrl, setVerificationUrl] = useState<string | null>(null);
-  const [webviewLoading, setWebviewLoading] = useState(false);
+  const [sdkRunning, setSdkRunning] = useState(false);
 
   const handleStartVerification = async () => {
     try {
-      const url = await startVerification();
-      setVerificationUrl(url);
+      const accessToken = await startVerification();
+
+      if (Platform.OS === 'web') {
+        // Web platform - show message that verification requires mobile
+        alert('Identity verification requires the mobile app. Please use iOS or Android.');
+        return;
+      }
+
+      if (!SNSMobileSDK) {
+        console.error('Sumsub SDK not available');
+        return;
+      }
+
+      setSdkRunning(true);
+
+      // Launch Sumsub SDK
+      const snsMobileSDK = SNSMobileSDK.init(accessToken, () => {
+        // Token expiration handler - get a new token
+        return startVerification();
+      })
+        .withHandlers({
+          onStatusChanged: (event: any) => {
+            console.log('[Sumsub] Status changed:', event.prevStatus, '->', event.newStatus);
+          },
+          onLog: (event: any) => {
+            console.log('[Sumsub] Log:', event.message);
+          },
+        })
+        .withDebug(true)
+        .build();
+
+      const result = await snsMobileSDK.launch();
+      console.log('[Sumsub] SDK result:', result);
+
+      setSdkRunning(false);
+
+      // Check if verification was successful
+      if (result.status === 'Approved' || result.status === 'ActionCompleted') {
+        await refreshKycStatus();
+        router.replace('/(tabs)');
+      } else if (result.status === 'Pending') {
+        // User completed the flow, pending review
+        await refreshKycStatus();
+        router.replace('/(tabs)');
+      }
+      // If cancelled or failed, stay on this screen
     } catch (err) {
-      // Error handled by context
+      console.error('[Sumsub] Error:', err);
+      setSdkRunning(false);
     }
   };
 
@@ -32,46 +86,15 @@ export default function VerifyIdentityScreen() {
     router.replace('/(tabs)');
   };
 
-  const handleWebViewNavigationChange = async (navState: any) => {
-    if (navState.url?.includes('success') || navState.url?.includes('complete')) {
-      setVerificationUrl(null);
-      await refreshKycStatus();
-      router.replace('/(tabs)');
-    }
-  };
-
-  // Show WebView if we have a verification URL
-  if (verificationUrl) {
+  // Show loading state while SDK is running
+  if (sdkRunning) {
     return (
-      <SafeAreaView style={styles.webviewContainer} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <StatusBar barStyle="light-content" backgroundColor="#000" />
-        <View style={styles.webviewHeader}>
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={() => setVerificationUrl(null)}
-          >
-            <Ionicons name="close" size={24} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.webviewTitle}>Identity Verification</Text>
-          <View style={styles.placeholder} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#00D4AA" />
+          <Text style={styles.loadingText}>Verification in progress...</Text>
         </View>
-
-        {webviewLoading && (
-          <View style={styles.webviewLoading}>
-            <ActivityIndicator size="large" color="#00D4AA" />
-          </View>
-        )}
-
-        <WebView
-          source={{ uri: verificationUrl }}
-          style={styles.webview}
-          onLoadStart={() => setWebviewLoading(true)}
-          onLoadEnd={() => setWebviewLoading(false)}
-          onNavigationStateChange={handleWebViewNavigationChange}
-          javaScriptEnabled
-          domStorageEnabled
-          startInLoadingState
-        />
       </SafeAreaView>
     );
   }
@@ -129,11 +152,20 @@ export default function VerifyIdentityScreen() {
 
         {error && <Text style={styles.error}>{error}</Text>}
 
+        {Platform.OS === 'web' && (
+          <View style={styles.webWarning}>
+            <Ionicons name="phone-portrait-outline" size={20} color="#FFB800" />
+            <Text style={styles.webWarningText}>
+              Identity verification requires the mobile app
+            </Text>
+          </View>
+        )}
+
         <View style={styles.buttons}>
           <TouchableOpacity
-            style={[styles.button, isLoading && styles.buttonDisabled]}
+            style={[styles.button, (isLoading || Platform.OS === 'web') && styles.buttonDisabled]}
             onPress={handleStartVerification}
-            disabled={isLoading}
+            disabled={isLoading || Platform.OS === 'web'}
           >
             {isLoading ? (
               <ActivityIndicator color="#000" />
@@ -262,6 +294,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 16,
   },
+  webWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2a2000',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    gap: 8,
+  },
+  webWarningText: {
+    color: '#FFB800',
+    fontSize: 14,
+  },
   buttons: {
     marginTop: 'auto',
   },
@@ -290,47 +336,14 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 16,
   },
-  // WebView styles
-  webviewContainer: {
+  loadingContainer: {
     flex: 1,
-    backgroundColor: '#000',
-  },
-  webviewHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#222',
-  },
-  closeButton: {
-    width: 40,
-    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 16,
   },
-  webviewTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  placeholder: {
-    width: 40,
-  },
-  webview: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-  webviewLoading: {
-    position: 'absolute',
-    top: 60,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#000',
-    zIndex: 1,
+  loadingText: {
+    color: '#888',
+    fontSize: 16,
   },
 });

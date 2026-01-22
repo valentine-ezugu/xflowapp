@@ -1,57 +1,49 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  FlatList,
   ActivityIndicator,
   StatusBar,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '@/services/api';
-import { Recipient, RecipientUser, RecipientWallet, FindRecipientResponse } from '@/types/transfer';
+import { FindRecipientResponse, UserRecipientDto } from '@/types/transfer';
 
 export default function SendToScreen() {
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [recentUsers, setRecentUsers] = useState<RecipientUser[]>([]);
-  const [friends, setFriends] = useState<RecipientUser[]>([]);
-  const [searchResults, setSearchResults] = useState<Recipient[]>([]);
-
-  // Load initial data (recent/friends) on mount
-  useEffect(() => {
-    loadInitialData();
-  }, []);
-
-  const loadInitialData = async () => {
-    try {
-      const response = await api.transfer.findRecipient('');
-      setRecentUsers(response.recentUsers || []);
-      setFriends(response.friends || []);
-    } catch (error) {
-      console.error('Failed to load recipients:', error);
-    }
-  };
+  const [searchResponse, setSearchResponse] = useState<FindRecipientResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Debounced search
   useEffect(() => {
     if (!query.trim()) {
-      setSearchResults([]);
+      setSearchResponse(null);
+      setError(null);
       return;
     }
 
     const timer = setTimeout(async () => {
       setIsLoading(true);
+      setError(null);
       try {
         const response = await api.transfer.findRecipient(query.trim());
-        setSearchResults(response.searchResults || []);
-      } catch (error) {
-        console.error('Search failed:', error);
-        setSearchResults([]);
+        setSearchResponse(response);
+
+        // Check for error message from backend
+        if (response.errorMessage) {
+          setError(response.errorMessage);
+        }
+      } catch (err: any) {
+        console.error('Search failed:', err);
+        setError(err.message || 'Search failed');
+        setSearchResponse(null);
       } finally {
         setIsLoading(false);
       }
@@ -60,26 +52,31 @@ export default function SendToScreen() {
     return () => clearTimeout(timer);
   }, [query]);
 
-  const handleSelectRecipient = (recipient: Recipient) => {
-    if (recipient.type === 'user') {
-      router.push({
-        pathname: '/(send)/amount',
-        params: {
-          type: 'user',
-          recipientId: recipient.userId,
-          displayName: recipient.xflowTag,
-        },
-      });
-    } else {
-      router.push({
-        pathname: '/(send)/amount',
-        params: {
-          type: 'wallet',
-          address: recipient.address,
-          displayName: recipient.displayAddress,
-        },
-      });
-    }
+  const handleSelectUser = (user: UserRecipientDto) => {
+    router.push({
+      pathname: '/(send)/amount',
+      params: {
+        type: 'user',
+        xflowTag: user.xflowTag,
+        displayName: user.fullName || user.xflowTag,
+      },
+    });
+  };
+
+  const handleSelectExternalAddress = (address: string) => {
+    router.push({
+      pathname: '/(send)/amount',
+      params: {
+        type: 'external',
+        address: address,
+        displayName: truncateAddress(address),
+      },
+    });
+  };
+
+  const truncateAddress = (address: string) => {
+    if (address.length <= 16) return address;
+    return `${address.slice(0, 8)}...${address.slice(-6)}`;
   };
 
   const handleBack = () => {
@@ -88,57 +85,57 @@ export default function SendToScreen() {
 
   const clearQuery = () => {
     setQuery('');
-    setSearchResults([]);
+    setSearchResponse(null);
+    setError(null);
   };
 
-  const renderUserItem = (user: RecipientUser) => (
-    <TouchableOpacity
-      key={user.userId}
-      style={styles.recipientItem}
-      onPress={() => handleSelectRecipient(user)}
-    >
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>
-          {user.xflowTag.charAt(1).toUpperCase()}
-        </Text>
-      </View>
-      <View style={styles.recipientInfo}>
-        <Text style={styles.recipientName}>{user.xflowTag}</Text>
-        {user.displayName && (
-          <Text style={styles.recipientSubtext}>{user.displayName}</Text>
-        )}
-      </View>
-      <Ionicons name="chevron-forward" size={20} color="#666" />
-    </TouchableOpacity>
-  );
+  const renderUserItem = (user: UserRecipientDto, index: number) => {
+    // Get first letter after @ for avatar
+    const avatarLetter = user.xflowTag.startsWith('@')
+      ? user.xflowTag.charAt(1).toUpperCase()
+      : user.xflowTag.charAt(0).toUpperCase();
 
-  const renderWalletItem = (wallet: RecipientWallet) => (
+    return (
+      <TouchableOpacity
+        key={`${user.xflowTag}-${index}`}
+        style={styles.recipientItem}
+        onPress={() => handleSelectUser(user)}
+      >
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{avatarLetter}</Text>
+        </View>
+        <View style={styles.recipientInfo}>
+          <Text style={styles.recipientName}>{user.xflowTag}</Text>
+          {user.fullName && (
+            <Text style={styles.recipientSubtext}>{user.fullName}</Text>
+          )}
+        </View>
+        <Ionicons name="chevron-forward" size={20} color="#666" />
+      </TouchableOpacity>
+    );
+  };
+
+  const renderExternalWallet = (address: string) => (
     <TouchableOpacity
-      key={wallet.address}
       style={styles.recipientItem}
-      onPress={() => handleSelectRecipient(wallet)}
+      onPress={() => handleSelectExternalAddress(address)}
     >
       <View style={[styles.avatar, styles.walletAvatar]}>
         <Ionicons name="wallet" size={18} color="#fff" />
       </View>
       <View style={styles.recipientInfo}>
-        <Text style={styles.recipientName}>{wallet.displayAddress}</Text>
+        <Text style={styles.recipientName}>{truncateAddress(address)}</Text>
         <Text style={styles.recipientSubtext}>External wallet</Text>
       </View>
       <Ionicons name="chevron-forward" size={20} color="#666" />
     </TouchableOpacity>
   );
 
-  const renderRecipientItem = (recipient: Recipient) => {
-    if (recipient.type === 'user') {
-      return renderUserItem(recipient);
-    } else {
-      return renderWalletItem(recipient);
-    }
-  };
-
-  const showSearchResults = query.trim().length > 0;
-  const showInitialLists = !showSearchResults && (recentUsers.length > 0 || friends.length > 0);
+  const showSearchResults = query.trim().length > 0 && !isLoading;
+  const hasUserMatches = searchResponse?.type === 'XFLOW_USER' && searchResponse.matches && searchResponse.matches.length > 0;
+  const hasValidAddress = searchResponse?.type === 'EXTERNAL_ADDRESS' && searchResponse.isValid && searchResponse.address;
+  const hasInvalidAddress = searchResponse?.type === 'EXTERNAL_ADDRESS' && !searchResponse.isValid;
+  const noResults = showSearchResults && searchResponse && !hasUserMatches && !hasValidAddress && !hasInvalidAddress;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -183,41 +180,63 @@ export default function SendToScreen() {
       )}
 
       {/* Search Results */}
-      {showSearchResults && !isLoading && (
-        <View style={styles.section}>
-          {searchResults.length > 0 ? (
-            <>
-              <Text style={styles.sectionTitle}>
-                {searchResults[0]?.type === 'wallet' ? 'External wallet' : 'Search results'}
+      <ScrollView style={styles.scrollContent}>
+        {/* XFlow User Matches */}
+        {showSearchResults && hasUserMatches && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>XflowTags</Text>
+            {searchResponse!.matches!.map((user, index) => renderUserItem(user, index))}
+          </View>
+        )}
+
+        {/* External Address */}
+        {showSearchResults && hasValidAddress && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>External wallet</Text>
+            {renderExternalWallet(searchResponse!.address!)}
+          </View>
+        )}
+
+        {/* Invalid Address Error */}
+        {showSearchResults && hasInvalidAddress && (
+          <View style={styles.section}>
+            <View style={styles.errorContainer}>
+              <Ionicons name="alert-circle" size={20} color="#FF6B6B" />
+              <Text style={styles.errorText}>
+                {searchResponse?.errorMessage || 'Invalid XRP address'}
               </Text>
-              {searchResults.map(renderRecipientItem)}
-            </>
-          ) : (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No results found</Text>
             </View>
-          )}
-        </View>
-      )}
+          </View>
+        )}
 
-      {/* Initial Lists (Recent & Friends) */}
-      {showInitialLists && (
-        <View style={styles.scrollContent}>
-          {recentUsers.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Transacted recently</Text>
-              {recentUsers.map(renderUserItem)}
-            </View>
-          )}
+        {/* No Results */}
+        {noResults && (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No results found</Text>
+          </View>
+        )}
 
-          {friends.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Friends</Text>
-              {friends.map(renderUserItem)}
+        {/* General Error */}
+        {error && !hasInvalidAddress && (
+          <View style={styles.section}>
+            <View style={styles.errorContainer}>
+              <Ionicons name="alert-circle" size={20} color="#FF6B6B" />
+              <Text style={styles.errorText}>{error}</Text>
             </View>
-          )}
-        </View>
-      )}
+          </View>
+        )}
+
+        {/* Empty state when no query */}
+        {!query.trim() && (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="search" size={48} color="#333" />
+            <Text style={styles.emptyTitle}>Search for recipients</Text>
+            <Text style={styles.emptyText}>
+              Enter an XflowTag or XRP wallet address
+            </Text>
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -329,11 +348,31 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   emptyContainer: {
-    paddingVertical: 40,
+    paddingVertical: 60,
     alignItems: 'center',
+    gap: 12,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
   },
   emptyText: {
     fontSize: 15,
     color: '#888',
+    textAlign: 'center',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2a1515',
+    borderRadius: 12,
+    padding: 16,
+    gap: 12,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#FF6B6B',
   },
 });

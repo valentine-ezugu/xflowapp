@@ -1,23 +1,20 @@
-// Find recipient response types
-export interface RecipientUser {
-  type: 'user';
-  userId: string;
+// Recipient type enum matching backend
+export type RecipientType = 'XFLOW_USER' | 'EXTERNAL_ADDRESS';
+
+// User recipient from search results
+export interface UserRecipientDto {
   xflowTag: string;
-  displayName?: string;
+  fullName: string | null;
+  avatarUrl: string | null;
 }
 
-export interface RecipientWallet {
-  type: 'wallet';
-  address: string;
-  displayAddress: string; // truncated for display
-}
-
-export type Recipient = RecipientUser | RecipientWallet;
-
+// Find recipient response - matches backend RecipientSearchResponse
 export interface FindRecipientResponse {
-  recentUsers: RecipientUser[];
-  friends: RecipientUser[];
-  searchResults: Recipient[];
+  type: RecipientType;
+  matches: UserRecipientDto[] | null; // For XFLOW_USER type
+  isValid: boolean | null; // For EXTERNAL_ADDRESS type
+  address: string | null; // For EXTERNAL_ADDRESS type
+  errorMessage: string | null;
 }
 
 // Send preview request
@@ -65,6 +62,15 @@ export interface ExternalTransferRequest {
   xrpAmount: number;
   destinationTag?: number;
   note?: string;
+}
+
+// Receive XRP response (deposit address info)
+export interface ReceiveXrpResponse {
+  address: string; // XFlow treasury wallet address
+  destinationTag: number; // User's unique destination tag
+  network: string; // "XRP Ledger"
+  minimumDeposit: string; // e.g., "1"
+  warning: string; // Warning about destination tag requirement
 }
 
 // Send response (matches backend SendXrpResponse)

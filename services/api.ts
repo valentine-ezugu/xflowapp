@@ -30,6 +30,7 @@ import {
   InternalTransferRequest,
   ExternalTransferRequest,
   SendXrpResponse,
+  ReceiveXrpResponse,
 } from '@/types/transfer';
 import {
   PaymentListResponse,
@@ -43,21 +44,30 @@ import {
   DeclineRequestData,
 } from '@/types/payment';
 
-// Configuration - determine API URL based on platform and environment
+// API Configuration
+// Set to true to use localhost, false to use dev server
+const USE_LOCALHOST = false;
+
 const getApiBaseUrl = (): string => {
   if (!__DEV__) {
-    return 'https://api.xflow.com/api/v1'; // Production URL
+    return 'https://api.zevlian..com/api/v1'; // Production URL
   }
 
-  // Development URLs by platform
-  if (Platform.OS === 'web') {
-    return 'http://localhost:8080/api/v1';
-  } else if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:8080/api/v1'; // Android emulator localhost
-  } else {
-    // iOS - use your computer's local IP address
-    return 'http://10.202.230.28:8080/api/v1';
+  // Development: use remote dev server or localhost
+  if (USE_LOCALHOST) {
+    // Localhost URLs by platform
+    if (Platform.OS === 'web') {
+      return 'http://localhost:8080/api/v1';
+    } else if (Platform.OS === 'android') {
+      return 'http://10.0.2.2:8080/api/v1'; // Android emulator localhost
+    } else {
+      // iOS - use your computer's local IP address
+      return 'http://10.202.230.28:8080/api/v1';
+    }
   }
+
+  // Remote dev server (works on all platforms)
+  return 'https://dev-api.zevlian.com/api/v1';
 };
 
 const API_BASE_URL = getApiBaseUrl();
@@ -458,7 +468,7 @@ export const transferApi = {
    * Returns recent users, friends, and search results
    */
   async findRecipient(query: string): Promise<FindRecipientResponse> {
-    return fetchWithAuth<FindRecipientResponse>(`/transfer/find?query=${encodeURIComponent(query)}`);
+    return fetchWithAuth<FindRecipientResponse>(`/xrp/send/find-recipient?query=${encodeURIComponent(query)}`);
   },
 
   /**
@@ -492,6 +502,14 @@ export const transferApi = {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  },
+
+  /**
+   * Get deposit address for receiving XRP from external sources
+   * Returns treasury address and user's unique destination tag
+   */
+  async getReceiveAddress(): Promise<ReceiveXrpResponse> {
+    return fetchWithAuth<ReceiveXrpResponse>('/xrp/receive');
   },
 };
 
