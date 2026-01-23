@@ -18,14 +18,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { api } from '@/services/api';
 import { ConversationItem, PaymentConversationResponse, PaymentDetailDto } from '@/types/payment';
 
-export default function ConversationScreen() {
+export default function CounterpartyConversationScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
-    userId?: string;
-    address?: string;
+    counterpartyId: string; // Format: 'user:123' or 'addr:rXXX...'
     displayName: string;
     xflowTag?: string;
-    isInternal: string;
   }>();
 
   const [conversation, setConversation] = useState<PaymentConversationResponse | null>(null);
@@ -35,9 +33,10 @@ export default function ConversationScreen() {
   const [isProcessingRequest, setIsProcessingRequest] = useState<number | null>(null);
   const flatListRef = useRef<FlatList>(null);
 
-  const userId = params.userId ? parseInt(params.userId, 10) : null;
-  const address = params.address;
-  const isInternal = params.isInternal === '1';
+  // Parse the counterpartyId to determine if it's a user or address
+  const isInternalUser = params.counterpartyId?.startsWith('user:');
+  const userId = isInternalUser ? parseInt(params.counterpartyId.replace('user:', ''), 10) : null;
+  const address = !isInternalUser ? params.counterpartyId?.replace('addr:', '') : null;
 
   const loadConversation = useCallback(async () => {
     try {
@@ -88,21 +87,22 @@ export default function ConversationScreen() {
   };
 
   const handleSendPress = () => {
-    if (userId) {
+    if (userId && params.xflowTag) {
       router.push({
-        pathname: '/(send)',
+        pathname: '/(send)/amount',
         params: {
-          preselectedUserId: userId.toString(),
-          preselectedDisplayName: params.displayName,
-          preselectedXflowTag: params.xflowTag || '',
+          type: 'user',
+          xflowTag: params.xflowTag,
+          displayName: params.displayName,
         },
       });
     } else if (address) {
       router.push({
-        pathname: '/(send)',
+        pathname: '/(send)/amount',
         params: {
-          preselectedAddress: address,
-          preselectedDisplayName: params.displayName,
+          type: 'external',
+          address: address,
+          displayName: params.displayName,
         },
       });
     }
@@ -111,11 +111,10 @@ export default function ConversationScreen() {
   const handleRequestPress = () => {
     if (!userId || !params.xflowTag) return;
     router.push({
-      pathname: '/request-amount',
+      pathname: '/(request)/amount',
       params: {
-        userId: userId.toString(),
-        displayName: params.displayName,
         xflowTag: params.xflowTag,
+        displayName: params.displayName,
       },
     });
   };
@@ -219,16 +218,6 @@ export default function ConversationScreen() {
     }
   };
 
-  const getCurrencySymbol = (currency: string) => {
-    switch (currency) {
-      case 'EUR': return '€';
-      case 'USD': return '$';
-      case 'GBP': return '£';
-      case 'PLN': return 'zł';
-      default: return currency + ' ';
-    }
-  };
-
   // Group items by date
   const getGroupedItems = () => {
     if (!conversation?.items) return [];
@@ -270,6 +259,15 @@ export default function ConversationScreen() {
     );
   };
 
+  const getCurrencySymbol = (currency: string) => {
+    const symbols: Record<string, string> = {
+      EUR: '€', USD: '$', GBP: '£', PLN: 'zł', NGN: '₦',
+      JPY: '¥', CNY: '¥', INR: '₹', KRW: '₩', BRL: 'R$',
+      CHF: 'CHF', AUD: 'A$', CAD: 'C$', MXN: 'MX$', ZAR: 'R',
+    };
+    return symbols[currency] || currency;
+  };
+
   const renderPaymentBubble = (item: ConversationItem) => {
     if (!item.payment) return null;
     const { payment, isSent } = item;
@@ -279,6 +277,8 @@ export default function ConversationScreen() {
     const isCancelled = payment.status === 'CANCELLED';
     const isProcessing = isProcessingRequest === payment.id;
     const xrpAmount = parseFloat(payment.xrpAmount) || 0;
+    const fiatValue = parseFloat(payment.fiatValue) || 0;
+    const currencySymbol = getCurrencySymbol(payment.fiatCurrency || 'EUR');
 
     // For requests: isSent means I sent the request (I'm asking for money)
     // canRespond means I can pay/decline (I received the request)
@@ -287,29 +287,27 @@ export default function ConversationScreen() {
 
     if (isRequest) {
       return (
-        <View style={[styles.bubbleContainer, isSent ? styles.sentContainer : styles.receivedContainer]}>
+        <View style={[styles.bubbleContainer, styles.sentContainer]}>
           <View style={[
-            styles.requestBubble,
-            isSent ? styles.sentRequestBubble : styles.receivedRequestBubble,
-            (isDeclined || isCancelled) && styles.declinedRequestBubble,
+            styles.paymentBubble,
+            (isDeclined || isCancelled) && styles.declinedPaymentBubble,
           ]}>
-            <View style={styles.requestHeader}>
-              <Ionicons
-                name="arrow-down"
-                size={14}
-                color={isSent ? '#fff' : '#000'}
-              />
-              <Text style={[styles.requestLabel, isSent ? styles.sentText : styles.receivedPaymentText]}>
-                {isSent ? 'You requested' : `${params.displayName} requested`}
+            {/* Label with arrow */}
+            <View style={styles.paymentLabelRow}>
+              <Ionicons name={isSent ? 'arrow-forward' : 'arrow-back'} size={12} color="#888" />
+              <Text style={styles.paymentLabelText}>
+                {isSent ? 'You requested' : 'Requested'}
               </Text>
             </View>
-            <Text style={[styles.paymentAmount, isSent ? styles.sentText : styles.receivedPaymentText]}>
+
+            {/* Amount - show XRP prominently */}
+            <Text style={styles.paymentAmountText}>
               {xrpAmount.toFixed(2)} XRP
             </Text>
+
+            {/* Note if present */}
             {payment.note && (
-              <Text style={[styles.paymentNote, isSent ? styles.sentTime : styles.receivedPaymentNote]}>
-                {payment.note}
-              </Text>
+              <Text style={styles.paymentNoteText}>{payment.note}</Text>
             )}
 
             {/* Status badge for declined/cancelled */}
@@ -355,45 +353,43 @@ export default function ConversationScreen() {
                     style={styles.cancelButton}
                     onPress={() => handleCancelRequest(payment)}
                   >
-                    <Text style={styles.cancelButtonText}>Cancel request</Text>
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
                   </TouchableOpacity>
                 )}
               </View>
             )}
 
-            <Text style={[styles.timeText, isSent ? styles.sentTime : styles.receivedPaymentNote]}>
-              {formatTime(item.timestamp)}
-            </Text>
+            {/* Time */}
+            <Text style={styles.paymentTimeText}>{formatTime(item.timestamp)}</Text>
           </View>
         </View>
       );
     }
 
-    // Regular payment (not a request)
+    // Regular payment (not a request) - Revolut style dark bubble
     return (
-      <View style={[styles.bubbleContainer, isSent ? styles.sentContainer : styles.receivedContainer]}>
-        <View style={[styles.paymentBubble, isSent ? styles.sentPaymentBubble : styles.receivedPaymentBubble]}>
-          <View style={styles.paymentHeader}>
-            <Ionicons
-              name={isSent ? 'arrow-forward' : 'arrow-back'}
-              size={14}
-              color={isSent ? '#fff' : '#000'}
-            />
-            <Text style={[styles.paymentLabel, isSent ? styles.sentText : styles.receivedPaymentText]}>
+      <View style={[styles.bubbleContainer, styles.sentContainer]}>
+        <View style={styles.paymentBubble}>
+          {/* Label with arrow */}
+          <View style={styles.paymentLabelRow}>
+            <Ionicons name={isSent ? 'arrow-forward' : 'arrow-back'} size={12} color="#888" />
+            <Text style={styles.paymentLabelText}>
               {isSent ? 'You sent' : 'You received'}
             </Text>
           </View>
-          <Text style={[styles.paymentAmount, isSent ? styles.sentText : styles.receivedPaymentText]}>
+
+          {/* Amount - show XRP prominently */}
+          <Text style={styles.paymentAmountText}>
             {xrpAmount.toFixed(2)} XRP
           </Text>
+
+          {/* Note if present */}
           {payment.note && (
-            <Text style={[styles.paymentNote, isSent ? styles.sentTime : styles.receivedPaymentNote]}>
-              {payment.note}
-            </Text>
+            <Text style={styles.paymentNoteText}>{payment.note}</Text>
           )}
-          <Text style={[styles.timeText, isSent ? styles.sentTime : styles.receivedPaymentNote]}>
-            {formatTime(item.timestamp)}
-          </Text>
+
+          {/* Time */}
+          <Text style={styles.paymentTimeText}>{formatTime(item.timestamp)}</Text>
         </View>
       </View>
     );
@@ -424,8 +420,8 @@ export default function ConversationScreen() {
   }
 
   const groupedItems = getGroupedItems();
-  const canChat = conversation?.chatEnabled && isInternal;
-  const canRequest = conversation?.requestEnabled && isInternal;
+  const canChat = conversation?.chatEnabled && isInternalUser;
+  const canRequest = conversation?.requestEnabled && isInternalUser;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -438,7 +434,7 @@ export default function ConversationScreen() {
         </TouchableOpacity>
         <View style={styles.headerContent}>
           <Text style={styles.headerName}>{params.displayName}</Text>
-          <Text style={styles.headerTag}>{params.xflowTag}</Text>
+          {params.xflowTag && <Text style={styles.headerTag}>{params.xflowTag}</Text>}
         </View>
         <View style={styles.headerAvatar}>
           <Text style={styles.avatarText}>
@@ -468,22 +464,22 @@ export default function ConversationScreen() {
         }}
       />
 
-      {/* Action Buttons */}
+      {/* Action Buttons - Revolut style */}
       <View style={styles.actionBar}>
         {canRequest && (
-          <TouchableOpacity style={styles.actionButton} onPress={handleRequestPress}>
-            <Ionicons name="arrow-down" size={18} color="#fff" />
-            <Text style={styles.actionButtonText}>Request</Text>
+          <TouchableOpacity style={styles.requestButton} onPress={handleRequestPress}>
+            <Ionicons name="arrow-back" size={16} color="#fff" />
+            <Text style={styles.requestButtonText}>Request</Text>
           </TouchableOpacity>
         )}
-        <TouchableOpacity style={[styles.sendButton, !canRequest && styles.sendButtonFull]} onPress={handleSendPress}>
-          <Ionicons name="arrow-forward" size={18} color="#000" />
-          <Text style={styles.sendButtonText}>Send</Text>
+        <TouchableOpacity style={[styles.sendActionButton, !canRequest && styles.sendButtonFull]} onPress={handleSendPress}>
+          <Ionicons name="arrow-forward" size={16} color="#000" />
+          <Text style={styles.sendActionButtonText}>Send</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Message Input - only if chat is enabled */}
-      {isInternal && (
+      {/* Message Input - only for internal users */}
+      {isInternalUser && (
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={0}
@@ -641,10 +637,43 @@ const styles = StyleSheet.create({
     color: '#888',
   },
   paymentBubble: {
-    maxWidth: '75%',
-    padding: 16,
+    backgroundColor: '#1a1a1a',
     borderRadius: 16,
-    minWidth: 150,
+    borderBottomRightRadius: 4,
+    padding: 16,
+    minWidth: 160,
+    maxWidth: '70%',
+  },
+  declinedPaymentBubble: {
+    opacity: 0.5,
+  },
+  paymentLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+  },
+  paymentLabelText: {
+    fontSize: 12,
+    color: '#888',
+    fontWeight: '500',
+  },
+  paymentAmountText: {
+    fontSize: 32,
+    fontWeight: '300',
+    color: '#fff',
+    marginVertical: 4,
+  },
+  paymentNoteText: {
+    fontSize: 13,
+    color: '#888',
+    marginTop: 4,
+  },
+  paymentTimeText: {
+    fontSize: 11,
+    color: '#666',
+    textAlign: 'right',
+    marginTop: 8,
   },
   sentPaymentBubble: {
     backgroundColor: '#6C5CE7',
@@ -775,6 +804,36 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#fff',
+  },
+  requestButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1a1a1a',
+    paddingVertical: 12,
+    borderRadius: 24,
+    gap: 6,
+  },
+  requestButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  sendActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    paddingVertical: 12,
+    borderRadius: 24,
+    gap: 6,
+  },
+  sendActionButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000',
   },
   sendButton: {
     flex: 1,

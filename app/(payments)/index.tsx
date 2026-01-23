@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { api } from '@/services/api';
 import { PaymentCounterpartyDto } from '@/types/payment';
 
-export default function PaymentsScreen() {
+export default function PaymentsListScreen() {
   const [counterparties, setCounterparties] = useState<PaymentCounterpartyDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -56,22 +56,26 @@ export default function PaymentsScreen() {
     // Prefix with 'user:' or 'addr:' to distinguish
     if (item.isInternalUser && item.userId) {
       router.push({
-        pathname: '/(payments)/[counterpartyId]',
+        pathname: '/(payments)/[id]',
         params: {
-          counterpartyId: `user:${item.userId}`,
+          id: `user:${item.userId}`,
           displayName: item.displayName,
           xflowTag: item.xflowTag || '',
         },
       });
     } else if (item.externalAddress) {
       router.push({
-        pathname: '/(payments)/[counterpartyId]',
+        pathname: '/(payments)/[id]',
         params: {
-          counterpartyId: `addr:${item.externalAddress}`,
+          id: `addr:${item.externalAddress}`,
           displayName: item.displayName,
         },
       });
     }
+  };
+
+  const handleBack = () => {
+    router.back();
   };
 
   const formatTimestamp = (timestamp: string) => {
@@ -184,26 +188,29 @@ export default function PaymentsScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View style={styles.profileButton}>
-            <Ionicons name="person-circle-outline" size={32} color="#fff" />
-          </View>
-          <View style={styles.searchContainer}>
-            <Ionicons name="search" size={18} color="#888" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search"
-              placeholderTextColor="#888"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-          </View>
-          <TouchableOpacity style={styles.headerButton}>
-            <Ionicons name="calendar-outline" size={24} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerButton}>
-            <Ionicons name="add" size={28} color="#fff" />
-          </TouchableOpacity>
+        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+          <Ionicons name="chevron-back" size={24} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.title}>Payments</Text>
+        <View style={styles.placeholder} />
+      </View>
+
+      {/* Search */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchInputWrapper}>
+          <Ionicons name="search" size={18} color="#888" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search"
+            placeholderTextColor="#888"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={18} color="#888" />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -247,40 +254,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  profileButton: {
+  backButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  title: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  placeholder: {
+    width: 40,
+  },
   searchContainer: {
-    flex: 1,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  searchInputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#1a1a1a',
-    borderRadius: 20,
+    borderRadius: 12,
     paddingHorizontal: 12,
-    height: 36,
+    height: 40,
     gap: 8,
   },
   searchInput: {
     flex: 1,
     color: '#fff',
     fontSize: 15,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   listContent: {
     flexGrow: 1,
@@ -354,10 +364,6 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
-  unreadText: {
-    fontWeight: '600',
-    color: '#fff',
-  },
   amountText: {
     fontSize: 14,
     fontWeight: '600',
@@ -366,21 +372,6 @@ const styles = StyleSheet.create({
     color: '#00D4AA',
   },
   amountNegative: {
-    color: '#fff',
-  },
-  unreadBadge: {
-    backgroundColor: '#6C5CE7',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    marginLeft: 8,
-  },
-  unreadBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
     color: '#fff',
   },
   emptyContainer: {
