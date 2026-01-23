@@ -19,31 +19,26 @@ export default function SendToScreen() {
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [searchResponse, setSearchResponse] = useState<FindRecipientResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
 
   // Debounced search
   useEffect(() => {
-    if (!query.trim()) {
+    if (!query.trim() || query.trim().length < 3) {
       setSearchResponse(null);
-      setError(null);
+      setHasSearched(false);
       return;
     }
 
     const timer = setTimeout(async () => {
       setIsLoading(true);
-      setError(null);
       try {
         const response = await api.transfer.findRecipient(query.trim());
         setSearchResponse(response);
-
-        // Check for error message from backend
-        if (response.errorMessage) {
-          setError(response.errorMessage);
-        }
+        setHasSearched(true);
       } catch (err: any) {
         console.error('Search failed:', err);
-        setError(err.message || 'Search failed');
         setSearchResponse(null);
+        setHasSearched(true);
       } finally {
         setIsLoading(false);
       }
@@ -86,7 +81,7 @@ export default function SendToScreen() {
   const clearQuery = () => {
     setQuery('');
     setSearchResponse(null);
-    setError(null);
+    setHasSearched(false);
   };
 
   const renderUserItem = (user: UserRecipientDto, index: number) => {
@@ -131,11 +126,10 @@ export default function SendToScreen() {
     </TouchableOpacity>
   );
 
-  const showSearchResults = query.trim().length > 0 && !isLoading;
   const hasUserMatches = searchResponse?.type === 'XFLOW_USER' && searchResponse.matches && searchResponse.matches.length > 0;
   const hasValidAddress = searchResponse?.type === 'EXTERNAL_ADDRESS' && searchResponse.isValid && searchResponse.address;
-  const hasInvalidAddress = searchResponse?.type === 'EXTERNAL_ADDRESS' && !searchResponse.isValid;
-  const noResults = showSearchResults && searchResponse && !hasUserMatches && !hasValidAddress && !hasInvalidAddress;
+  // Show "not found" when we've searched but found nothing useful
+  const showNotFound = hasSearched && !isLoading && !hasUserMatches && !hasValidAddress;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -182,7 +176,7 @@ export default function SendToScreen() {
       {/* Search Results */}
       <ScrollView style={styles.scrollContent}>
         {/* XFlow User Matches */}
-        {showSearchResults && hasUserMatches && (
+        {hasUserMatches && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>XflowTags</Text>
             {searchResponse!.matches!.map((user, index) => renderUserItem(user, index))}
@@ -190,44 +184,28 @@ export default function SendToScreen() {
         )}
 
         {/* External Address */}
-        {showSearchResults && hasValidAddress && (
+        {hasValidAddress && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>External wallet</Text>
             {renderExternalWallet(searchResponse!.address!)}
           </View>
         )}
 
-        {/* Invalid Address Error */}
-        {showSearchResults && hasInvalidAddress && (
-          <View style={styles.section}>
-            <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle" size={20} color="#FF6B6B" />
-              <Text style={styles.errorText}>
-                {searchResponse?.errorMessage || 'Invalid XRP address'}
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* No Results */}
-        {noResults && (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No results found</Text>
-          </View>
-        )}
-
-        {/* General Error */}
-        {error && !hasInvalidAddress && (
-          <View style={styles.section}>
-            <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle" size={20} color="#FF6B6B" />
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
+        {/* Not found - clean minimal style */}
+        {showNotFound && (
+          <View style={styles.notFoundContainer}>
+            <Ionicons name="person-outline" size={48} color="#333" />
+            <Text style={styles.notFoundText}>
+              Can't find the person{'\n'}you are looking for
+            </Text>
+            <TouchableOpacity style={styles.resetButton} onPress={clearQuery}>
+              <Text style={styles.resetButtonText}>Reset search</Text>
+            </TouchableOpacity>
           </View>
         )}
 
         {/* Empty state when no query */}
-        {!query.trim() && (
+        {!query.trim() && !isLoading && (
           <View style={styles.emptyContainer}>
             <Ionicons name="search" size={48} color="#333" />
             <Text style={styles.emptyTitle}>Search for recipients</Text>
@@ -362,17 +340,27 @@ const styles = StyleSheet.create({
     color: '#888',
     textAlign: 'center',
   },
-  errorContainer: {
-    flexDirection: 'row',
+  notFoundContainer: {
+    paddingVertical: 60,
     alignItems: 'center',
-    backgroundColor: '#2a1515',
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
+    gap: 16,
   },
-  errorText: {
-    flex: 1,
+  notFoundText: {
+    fontSize: 15,
+    color: '#888',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  resetButton: {
+    backgroundColor: '#1a1a1a',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginTop: 8,
+  },
+  resetButtonText: {
     fontSize: 14,
-    color: '#FF6B6B',
+    fontWeight: '500',
+    color: '#fff',
   },
 });

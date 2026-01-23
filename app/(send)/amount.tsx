@@ -36,7 +36,7 @@ export default function SendAmountScreen() {
   }>();
 
   const [amount, setAmount] = useState('0');
-  const [inputMode, setInputMode] = useState<InputMode>('fiat');
+  const [inputMode, setInputMode] = useState<InputMode>('xrp'); // XRP primary - we're a crypto app
   const [preview, setPreview] = useState<SendPreviewResponse | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [note, setNote] = useState('');
@@ -283,11 +283,12 @@ export default function SendAmountScreen() {
   const errorText = getErrorMessage(preview);
   const canContinue = !!preview && preview.sufficient && preview.totalXrp > 0;
 
+  // Secondary shows fiat equivalent when in XRP mode (primary), XRP when in fiat mode
   const displaySecondary = isLoadingPreview
     ? '...'
-    : inputMode === 'fiat'
-      ? `≈ ${preview ? preview.recipientGetsXrp.toFixed(6) : '0'} XRP`
-      : `≈ ${currencySymbol}${preview ? preview.recipientGetsFiat.toFixed(2) : '0'}`;
+    : inputMode === 'xrp'
+      ? `≈ ${currencySymbol}${preview ? preview.recipientGetsFiat.toFixed(2) : '0'}`
+      : `≈ ${preview ? preview.recipientGetsXrp.toFixed(6) : '0'} XRP`;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

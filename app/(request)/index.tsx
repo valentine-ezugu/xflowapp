@@ -19,31 +19,26 @@ export default function RequestFromScreen() {
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [searchResponse, setSearchResponse] = useState<FindRecipientResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
 
   // Debounced search
   useEffect(() => {
-    if (!query.trim()) {
+    if (!query.trim() || query.trim().length < 3) {
       setSearchResponse(null);
-      setError(null);
+      setHasSearched(false);
       return;
     }
 
     const timer = setTimeout(async () => {
       setIsLoading(true);
-      setError(null);
       try {
         const response = await api.transfer.findRecipient(query.trim());
         setSearchResponse(response);
-
-        // Check for error message from backend
-        if (response.errorMessage) {
-          setError(response.errorMessage);
-        }
+        setHasSearched(true);
       } catch (err: any) {
         console.error('Search failed:', err);
-        setError(err.message || 'Search failed');
         setSearchResponse(null);
+        setHasSearched(true);
       } finally {
         setIsLoading(false);
       }
@@ -69,7 +64,7 @@ export default function RequestFromScreen() {
   const clearQuery = () => {
     setQuery('');
     setSearchResponse(null);
-    setError(null);
+    setHasSearched(false);
   };
 
   const renderUserItem = (user: UserRecipientDto, index: number) => {
@@ -98,11 +93,9 @@ export default function RequestFromScreen() {
     );
   };
 
-  const showSearchResults = query.trim().length > 0 && !isLoading;
   const hasUserMatches = searchResponse?.type === 'XFLOW_USER' && searchResponse.matches && searchResponse.matches.length > 0;
-  // For request, we only allow XFlow users - external addresses are not allowed
-  const isExternalAddress = searchResponse?.type === 'EXTERNAL_ADDRESS';
-  const noResults = showSearchResults && searchResponse && !hasUserMatches && !isExternalAddress;
+  // Show "not found" when we've searched but found no XFlow users
+  const showNotFound = hasSearched && !isLoading && !hasUserMatches;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -149,44 +142,28 @@ export default function RequestFromScreen() {
       {/* Search Results */}
       <ScrollView style={styles.scrollContent}>
         {/* XFlow User Matches */}
-        {showSearchResults && hasUserMatches && (
+        {hasUserMatches && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>XflowTags</Text>
             {searchResponse!.matches!.map((user, index) => renderUserItem(user, index))}
           </View>
         )}
 
-        {/* External Address - show info that only XFlow users can be requested */}
-        {showSearchResults && isExternalAddress && (
-          <View style={styles.section}>
-            <View style={styles.infoContainer}>
-              <Ionicons name="information-circle" size={20} color="#888" />
-              <Text style={styles.infoText}>
-                Payment requests can only be sent to XFlow users. Enter an XflowTag to request payment.
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* No Results */}
-        {noResults && (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No users found</Text>
-          </View>
-        )}
-
-        {/* General Error */}
-        {error && (
-          <View style={styles.section}>
-            <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle" size={20} color="#FF6B6B" />
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
+        {/* Not found - clean minimal style */}
+        {showNotFound && (
+          <View style={styles.notFoundContainer}>
+            <Ionicons name="person-outline" size={48} color="#333" />
+            <Text style={styles.notFoundText}>
+              Can't find the person{'\n'}you are looking for
+            </Text>
+            <TouchableOpacity style={styles.resetButton} onPress={clearQuery}>
+              <Text style={styles.resetButtonText}>Reset search</Text>
+            </TouchableOpacity>
           </View>
         )}
 
         {/* Empty state when no query */}
-        {!query.trim() && (
+        {!query.trim() && !isLoading && (
           <View style={styles.emptyContainer}>
             <Ionicons name="arrow-down-circle" size={48} color="#333" />
             <Text style={styles.emptyTitle}>Request payment</Text>
@@ -319,31 +296,27 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 24,
   },
-  infoContainer: {
-    flexDirection: 'row',
+  notFoundContainer: {
+    paddingVertical: 60,
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
+    gap: 16,
   },
-  infoText: {
-    flex: 1,
-    fontSize: 14,
+  notFoundText: {
+    fontSize: 15,
     color: '#888',
-    lineHeight: 20,
+    textAlign: 'center',
+    lineHeight: 22,
   },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#2a1515',
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
+  resetButton: {
+    backgroundColor: '#1a1a1a',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginTop: 8,
   },
-  errorText: {
-    flex: 1,
+  resetButtonText: {
     fontSize: 14,
-    color: '#FF6B6B',
+    fontWeight: '500',
+    color: '#fff',
   },
 });
