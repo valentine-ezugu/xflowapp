@@ -19,8 +19,8 @@ export default function ConfirmSendScreen() {
     recipientTag: string;
     address: string;
     displayName: string;
-    xrpAmount: string;
-    fiatAmount: string;
+    totalXrp: string;
+    totalFiat: string;
     fiatCurrency: string;
     feeXrp: string;
     feeFiat: string;
@@ -34,7 +34,7 @@ export default function ConfirmSendScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const isExternal = params.type === 'external';
-  const xrpAmount = parseFloat(params.xrpAmount) || 0; // Total XRP being sent (used for API call)
+  const totalXrp = parseFloat(params.totalXrp) || 0; // Total XRP being sent (used for API call)
   const feeXrp = parseFloat(params.feeXrp) || 0;
   const feeFiat = parseFloat(params.feeFiat) || 0;
   const recipientGetsXrp = parseFloat(params.recipientGetsXrp) || 0;
@@ -73,14 +73,14 @@ export default function ConfirmSendScreen() {
       if (isExternal) {
         response = await api.transfer.sendExternal({
           destinationAddress: params.address,
-          xrpAmount: xrpAmount,
+          xrpAmount: totalXrp,
           destinationTag: params.destinationTag ? parseInt(params.destinationTag, 10) : undefined,
           note: params.note || undefined,
         });
       } else {
         response = await api.transfer.sendInternal({
           recipientXflowTag: params.recipientTag,
-          xrpAmount: xrpAmount,
+          xrpAmount: totalXrp,
           note: params.note || undefined,
         });
       }

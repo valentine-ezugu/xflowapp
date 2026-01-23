@@ -25,7 +25,15 @@ export interface SendPreviewRequest {
   destinationAddress?: string; // For external transfer (XRP address)
   xrpAmount?: number; // XRP amount user wants to send
   fiatAmount?: number; // OR fiat amount user wants to send
+  useMax?: boolean; // Set to true to use maximum available balance
 }
+
+export type QuoteReason =
+  | 'NONE'
+  | 'INSUFFICIENT_BALANCE'
+  | 'INSUFFICIENT_NETWORK_FEE'
+  | 'INSUFFICIENT_TOTAL_FEES'
+  | 'RATE_UNAVAILABLE';
 
 // Send preview response
 export interface SendPreviewResponse {
@@ -38,6 +46,7 @@ export interface SendPreviewResponse {
   platformFeeXrp: number; // 0.5% platform fee (external only)
   recipientGetsXrp: number; // What recipient receives
   spendableXrp: number; // User's available balance
+  maxXrp: number; // Maximum sendable XRP
   willUseMax: boolean; // True if clamped to max
 
   // Fiat equivalents (in user's preferred currency)
@@ -46,8 +55,13 @@ export interface SendPreviewResponse {
   totalFiat: number; // totalXrp in fiat
   feeFiat: number; // fees in fiat
   recipientGetsFiat: number; // what recipient gets in fiat
+  maxFiat: number; // Maximum sendable in fiat
 
   destinationType: 'INTERNAL' | 'EXTERNAL';
+
+  // Validation
+  sufficient: boolean; // True if user has enough balance
+  reason: QuoteReason; // Reason if not sufficient
 }
 
 // Transfer request types

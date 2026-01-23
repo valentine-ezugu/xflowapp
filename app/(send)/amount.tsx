@@ -14,8 +14,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '@/services/api';
-import { SendPreviewResponse } from '@/types/transfer';
 import { useAuth } from '@/context/AuthContext';
+import { SendPreviewResponse } from '@/types/transfer';
 
 const NUMBER_PAD = [
   ['1', '2', '3'],
@@ -45,146 +45,6 @@ export default function SendAmountScreen() {
   const isExternalWallet = params.type === 'external';
   const recipientName = params.displayName || 'Unknown';
 
-  // Refresh balance when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      // Fetch a minimal preview to get current balance/rate
-      const fetchBalance = async () => {
-        try {
-          const response = await api.transfer.getPreview({
-            recipientTag: isExternalWallet ? undefined : params.xflowTag,
-            destinationAddress: isExternalWallet ? params.address : undefined,
-            xrpAmount: 0.0001, // minimal amount just to get balance/rate
-          });
-          setPreview(response);
-        } catch (error) {
-          console.error('Failed to fetch balance:', error);
-        }
-      };
-      fetchBalance();
-    }, [isExternalWallet, params.xflowTag, params.address])
-  );
-
-  // Get preview when amount changes
-  useEffect(() => {
-    const numAmount = parseFloat(amount.replace(',', '.')) || 0;
-    if (numAmount <= 0) {
-      setPreview(null);
-      return;
-    }
-
-    const fetchPreview = async () => {
-      setIsLoadingPreview(true);
-      try {
-        // Send either fiatAmount or xrpAmount based on input mode
-        const response = await api.transfer.getPreview({
-          recipientTag: isExternalWallet ? undefined : params.xflowTag,
-          destinationAddress: isExternalWallet ? params.address : undefined,
-          xrpAmount: inputMode === 'xrp' ? numAmount : undefined,
-          fiatAmount: inputMode === 'fiat' ? numAmount : undefined,
-        });
-        setPreview(response);
-      } catch (error) {
-        console.error('Failed to get preview:', error);
-      } finally {
-        setIsLoadingPreview(false);
-      }
-    };
-
-    const timer = setTimeout(fetchPreview, 300);
-    return () => clearTimeout(timer);
-  }, [amount, inputMode, params.xflowTag, params.address, isExternalWallet]);
-
-
-  const handleKeyPress = (key: string) => {
-    if (key === 'backspace') {
-      if (amount.length <= 1) {
-        setAmount('0');
-      } else {
-        setAmount(amount.slice(0, -1));
-      }
-    } else if (key === ',') {
-      if (!amount.includes(',')) {
-        setAmount(amount + ',');
-      }
-    } else {
-      if (amount === '0') {
-        setAmount(key);
-      } else {
-        // Limit decimal places
-        const parts = amount.split(',');
-        const maxDecimals = inputMode === 'fiat' ? 2 : 6;
-        if (parts.length === 2 && parts[1].length >= maxDecimals) {
-          return;
-        }
-        setAmount(amount + key);
-      }
-    }
-  };
-
-  const handleToggleMode = () => {
-    if (!preview) return;
-
-    // Convert current amount to the other mode
-    const numAmount = parseFloat(amount.replace(',', '.')) || 0;
-
-    if (inputMode === 'fiat') {
-      // Switching to XRP: convert fiat to XRP
-      const xrpValue = numAmount / preview.xrpRate;
-      setAmount(xrpValue > 0 ? xrpValue.toFixed(4).replace('.', ',') : '0');
-      setInputMode('xrp');
-    } else {
-      // Switching to fiat: convert XRP to fiat
-      const fiatValue = numAmount * preview.xrpRate;
-      setAmount(fiatValue > 0 ? fiatValue.toFixed(2).replace('.', ',') : '0');
-      setInputMode('fiat');
-    }
-  };
-
-  const handleMaxPress = () => {
-    if (!preview) return;
-
-    if (inputMode === 'xrp') {
-      setAmount(preview.spendableXrp.toFixed(4).replace('.', ','));
-    } else {
-      const maxFiat = preview.spendableXrp * preview.xrpRate;
-      setAmount(maxFiat.toFixed(2).replace('.', ','));
-    }
-  };
-
-  const handleContinue = () => {
-    if (!preview || preview.totalXrp <= 0) return;
-
-    if (preview.totalXrp > preview.spendableXrp) {
-      Alert.alert('Insufficient balance', 'You don\'t have enough XRP to complete this transfer.');
-      return;
-    }
-
-    // Navigate to confirmation screen with all the preview data
-    router.push({
-      pathname: '/(send)/confirm',
-      params: {
-        type: params.type,
-        recipientTag: params.xflowTag || '',
-        address: params.address || '',
-        displayName: recipientName,
-        xrpAmount: preview.totalXrp.toString(),
-        fiatAmount: preview.totalFiat.toString(),
-        fiatCurrency: preview.fiatCurrency,
-        feeXrp: preview.feeXrp.toString(),
-        feeFiat: preview.feeFiat.toString(),
-        recipientGetsXrp: preview.recipientGetsXrp.toString(),
-        recipientGetsFiat: preview.recipientGetsFiat.toString(),
-        note: note,
-        destinationTag: destinationTag,
-      },
-    });
-  };
-
-  const handleBack = () => {
-    router.back();
-  };
-
   const getCurrencySymbol = (currency: string) => {
     const symbols: Record<string, string> = {
       EUR: '€',
@@ -206,18 +66,228 @@ export default function SendAmountScreen() {
     return symbols[currency] || currency;
   };
 
-  // Use preview currency when available, fall back to user's default currency
+  const parseAmount = (s: string) => {
+    const num = parseFloat((s || '0').replace(',', '.'));
+    return Number.isFinite(num) ? num : 0;
+  };
+
+  const formatFiat = (n: number) => n.toFixed(2).replace('.', ',');
+  const formatXrp = (n: number) => n.toFixed(6).replace('.', ',');
+
+  const getErrorMessage = (p?: SendPreviewResponse | null) => {
+    if (!p) return null;
+    switch (p.reason) {
+      case 'INSUFFICIENT_BALANCE':
+        return 'Insufficient balance';
+      case 'INSUFFICIENT_NETWORK_FEE':
+        return 'Insufficient funds to pay network fee';
+      case 'INSUFFICIENT_TOTAL_FEES':
+        return 'Insufficient funds to cover fees';
+      case 'RATE_UNAVAILABLE':
+        return 'Rate unavailable';
+      default:
+        return null;
+    }
+  };
+
   const fiatCurrency = preview?.fiatCurrency || user?.defaultCurrency || 'EUR';
   const currencySymbol = getCurrencySymbol(fiatCurrency);
-  const canContinue = preview && preview.totalXrp > 0 && preview.totalXrp <= preview.spendableXrp;
 
-  // Display values - show what recipient gets (after fees for external)
-  const displayAmount = amount;
+  // Fetch a minimal preview on focus to refresh balance/rate
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      const fetchBootstrapPreview = async () => {
+        try {
+          const response = await api.transfer.getPreview({
+            recipientTag: isExternalWallet ? undefined : params.xflowTag,
+            destinationAddress: isExternalWallet ? params.address : undefined,
+            xrpAmount: 0.0001, // minimal amount for bootstrap
+            useMax: false,
+          });
+
+          if (!cancelled) setPreview(response);
+        } catch (error) {
+          console.error('Failed to fetch bootstrap preview:', error);
+        }
+      };
+
+      fetchBootstrapPreview();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [isExternalWallet, params.xflowTag, params.address])
+  );
+
+  // Debounced preview for typing
+  useEffect(() => {
+    const numAmount = parseAmount(amount);
+    if (numAmount <= 0) {
+      setPreview(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchPreview = async () => {
+      setIsLoadingPreview(true);
+      try {
+        const response = await api.transfer.getPreview({
+          recipientTag: isExternalWallet ? undefined : params.xflowTag,
+          destinationAddress: isExternalWallet ? params.address : undefined,
+          xrpAmount: inputMode === 'xrp' ? numAmount : undefined,
+          fiatAmount: inputMode === 'fiat' ? numAmount : undefined,
+          useMax: false,
+        });
+
+        if (!cancelled) setPreview(response);
+      } catch (error) {
+        console.error('Failed to get preview:', error);
+      } finally {
+        if (!cancelled) setIsLoadingPreview(false);
+      }
+    };
+
+    const timer = setTimeout(fetchPreview, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [amount, inputMode, params.xflowTag, params.address, isExternalWallet]);
+
+  const handleKeyPress = (key: string) => {
+    if (key === 'backspace') {
+      if (amount.length <= 1) setAmount('0');
+      else setAmount(amount.slice(0, -1));
+      return;
+    }
+
+    if (key === ',') {
+      if (!amount.includes(',')) setAmount(amount + ',');
+      return;
+    }
+
+    // digit
+    if (amount === '0') {
+      setAmount(key);
+      return;
+    }
+
+    // Limit decimal places
+    const parts = amount.split(',');
+    const maxDecimals = inputMode === 'fiat' ? 2 : 6;
+    if (parts.length === 2 && parts[1].length >= maxDecimals) return;
+
+    setAmount(amount + key);
+  };
+
+  const handleToggleMode = () => {
+    if (!preview) return;
+
+    const numAmount = parseAmount(amount);
+    if (numAmount <= 0) {
+      setInputMode(inputMode === 'fiat' ? 'xrp' : 'fiat');
+      return;
+    }
+
+    if (inputMode === 'fiat') {
+      // fiat -> xrp
+      const xrpValue = preview.xrpRate > 0 ? numAmount / preview.xrpRate : 0;
+      setAmount(xrpValue > 0 ? formatXrp(xrpValue) : '0');
+      setInputMode('xrp');
+    } else {
+      // xrp -> fiat
+      const fiatValue = numAmount * preview.xrpRate;
+      setAmount(fiatValue > 0 ? formatFiat(fiatValue) : '0');
+      setInputMode('fiat');
+    }
+  };
+
+  /**
+   * MoonPay-style Max:
+   * - call backend with useMax=true so backend clamps after fees
+   * - then set the input box to maxSendFiat/maxSendXrp depending on mode
+   */
+  const handleMaxPress = async () => {
+    try {
+      setIsLoadingPreview(true);
+
+      const response: SendPreviewResponse = await api.transfer.getPreview({
+        recipientTag: isExternalWallet ? undefined : params.xflowTag,
+        destinationAddress: isExternalWallet ? params.address : undefined,
+        // send any small positive input; backend will clamp because useMax=true
+        xrpAmount: inputMode === 'xrp' ? 0.0001 : undefined,
+        fiatAmount: inputMode === 'fiat' ? 0.01 : undefined,
+        useMax: true,
+      });
+
+      setPreview(response);
+
+      if (inputMode === 'xrp') {
+        setAmount(formatXrp(response.maxXrp));
+      } else {
+        setAmount(formatFiat(response.maxFiat));
+      }
+    } catch (e) {
+      console.error('Max preview failed:', e);
+    } finally {
+      setIsLoadingPreview(false);
+    }
+  };
+
+  const handleContinue = () => {
+    if (!preview) return;
+
+    const err = getErrorMessage(preview);
+    if (!preview.sufficient) {
+      Alert.alert('Cannot continue', err || 'Invalid amount');
+      return;
+    }
+
+    if (preview.totalXrp <= 0) {
+      Alert.alert('Invalid amount', 'Enter an amount greater than 0.');
+      return;
+    }
+
+    router.push({
+      pathname: '/(send)/confirm',
+      params: {
+        type: params.type,
+        recipientTag: params.xflowTag || '',
+        address: params.address || '',
+        displayName: recipientName,
+
+        // amounts
+        totalXrp: preview.totalXrp.toString(),
+        totalFiat: preview.totalFiat.toString(),
+
+        fiatCurrency: preview.fiatCurrency,
+        feeXrp: preview.feeXrp.toString(),
+        feeFiat: preview.feeFiat.toString(),
+        recipientGetsXrp: preview.recipientGetsXrp.toString(),
+        recipientGetsFiat: preview.recipientGetsFiat.toString(),
+        networkFeeXrp: preview.networkFeeXrp.toString(),
+        platformFeeXrp: preview.platformFeeXrp.toString(),
+        destinationType: preview.destinationType,
+
+        note,
+        destinationTag,
+      },
+    });
+  };
+
+  const handleBack = () => router.back();
+
+  const errorText = getErrorMessage(preview);
+  const canContinue = !!preview && preview.sufficient && preview.totalXrp > 0;
+
   const displaySecondary = isLoadingPreview
     ? '...'
     : inputMode === 'fiat'
-      ? `≈ ${preview?.recipientGetsXrp?.toFixed(4) || '0'} XRP`
-      : `≈ ${currencySymbol}${preview?.recipientGetsFiat?.toFixed(2) || '0'}`;
+      ? `≈ ${preview ? preview.recipientGetsXrp.toFixed(6) : '0'} XRP`
+      : `≈ ${currencySymbol}${preview ? preview.recipientGetsFiat.toFixed(2) : '0'}`;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -228,6 +298,7 @@ export default function SendAmountScreen() {
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>
           <Ionicons name="chevron-back" size={24} color="#fff" />
         </TouchableOpacity>
+
         <View style={styles.recipientBadge}>
           {isExternalWallet ? (
             <View style={[styles.recipientAvatar, styles.walletAvatar]}>
@@ -236,12 +307,13 @@ export default function SendAmountScreen() {
           ) : (
             <View style={styles.recipientAvatar}>
               <Text style={styles.avatarText}>
-                {recipientName.charAt(1)?.toUpperCase() || 'X'}
+                {recipientName.charAt(0)?.toUpperCase() || 'X'}
               </Text>
             </View>
           )}
           <Text style={styles.recipientName}>{recipientName}</Text>
         </View>
+
         <View style={styles.placeholder} />
       </View>
 
@@ -251,13 +323,10 @@ export default function SendAmountScreen() {
           <Text style={styles.currencySymbol}>
             {inputMode === 'fiat' ? currencySymbol : ''}
           </Text>
-          <Text style={styles.amountText}>{displayAmount}</Text>
-          {inputMode === 'xrp' && (
-            <Text style={styles.xrpLabel}> XRP</Text>
-          )}
+          <Text style={styles.amountText}>{amount}</Text>
+          {inputMode === 'xrp' && <Text style={styles.xrpLabel}> XRP</Text>}
         </TouchableOpacity>
 
-        {/* Toggle indicator and secondary value */}
         <TouchableOpacity style={styles.secondaryRow} onPress={handleToggleMode}>
           <Ionicons name="swap-vertical" size={16} color="#888" />
           {isLoadingPreview ? (
@@ -266,6 +335,9 @@ export default function SendAmountScreen() {
             <Text style={styles.secondaryText}>{displaySecondary}</Text>
           )}
         </TouchableOpacity>
+
+        {/* Error line (MoonPay-style) */}
+        {errorText && <Text style={styles.errorText}>{errorText}</Text>}
 
         {/* Max Button */}
         <TouchableOpacity style={styles.maxButton} onPress={handleMaxPress}>
@@ -284,15 +356,17 @@ export default function SendAmountScreen() {
             <Text style={styles.walletNetwork}>XRP • XRPL</Text>
           </View>
         </View>
+
         <View style={styles.walletBalance}>
           <Text style={styles.balanceAmount}>
             {currencySymbol}
             {preview ? (preview.spendableXrp * preview.xrpRate).toFixed(2) : '0.00'}
           </Text>
           <Text style={styles.balanceXrp}>
-            {preview?.spendableXrp?.toFixed(4) || '0'} XRP
+            {preview ? preview.spendableXrp.toFixed(6) : '0'} XRP
           </Text>
         </View>
+
         <Ionicons name="chevron-forward" size={20} color="#666" />
       </View>
 
@@ -327,6 +401,7 @@ export default function SendAmountScreen() {
           onChangeText={isExternalWallet ? setDestinationTag : setNote}
           keyboardType={isExternalWallet ? 'number-pad' : 'default'}
         />
+
         <TouchableOpacity
           style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
           onPress={handleContinue}
@@ -428,6 +503,12 @@ const styles = StyleSheet.create({
   secondaryText: {
     fontSize: 16,
     color: '#888',
+  },
+  errorText: {
+    marginTop: 10,
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#ff8a00',
   },
   maxButton: {
     marginTop: 16,
