@@ -97,7 +97,7 @@ export default function HomeScreen() {
           onAddFundsPress={() => console.log('Add Funds')}
           onSendPress={() => router.push('/(send)')}
           onReceivePress={() => router.push('/(receive)')}
-          onRequestPress={() => console.log('Request')}
+          onRequestPress={() => router.push('/(request)')}
         />
 
         {/* KYC progress card (shown if not fully verified) */}
