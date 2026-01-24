@@ -17,6 +17,7 @@
     "@expo/vector-icons": "^15.0.3",
     "@react-navigation/bottom-tabs": "^7.2.0",
     "@react-navigation/native": "^7.0.14",
+    "@stomp/stompjs": "^7.2.1",
     "@sumsub/react-native-mobilesdk-module": "^1.40.2",
     "expo": "~54.0.0",
     "expo-blur": "~15.0.8",
@@ -43,7 +44,9 @@
     "react-native-svg": "^15.15.1",
     "react-native-web": "^0.21.0",
     "react-native-webview": "13.15.0",
-    "react-native-worklets": "0.5.1"
+    "react-native-worklets": "0.5.1",
+    "sockjs-client": "^1.6.1",
+    "text-encoding-polyfill": "^0.6.7"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

@@ -12,6 +12,7 @@ import {
   SaveAddressRequest,
 } from '@/types/auth';
 import { api, tokenStorage, setTokenRefreshFailedCallback, ApiError } from '@/services/api';
+import { webSocketService } from '@/services/websocket';
 
 // Context value type
 interface AuthContextValue extends AuthState {
@@ -69,6 +70,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Handle logout (also used when refresh token fails)
   const logout = useCallback(async () => {
+    // Disconnect WebSocket
+    webSocketService.disconnect();
+
     await api.auth.logout();
     setState({
       status: 'unauthenticated',
@@ -108,6 +112,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
               user,
               kycStatus,
             });
+
+            // Connect to WebSocket for real-time notifications
+            webSocketService.connect();
           } catch (err) {
             // Token invalid, clear and go to login
             await tokenStorage.clearTokens();
@@ -208,6 +215,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         user,
         kycStatus,
       });
+
+      // Connect to WebSocket for real-time notifications
+      webSocketService.connect();
 
       // Navigate based on KYC status
       if (kycStatus.kycTier === 'NONE') {

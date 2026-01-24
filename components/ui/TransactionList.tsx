@@ -20,10 +20,12 @@ const TRANSACTION_ICONS: Record<TransactionType, { name: keyof typeof Ionicons.g
   DEPOSIT_XRP: { name: 'arrow-down-circle', color: '#00D4AA' },
 };
 
-function formatAmount(amount: number, currency: string): string {
+function formatAmount(amount: number, currency: string | null | undefined): string {
+  // Default to EUR if currency is null/undefined
+  const safeCurrency = currency || 'EUR';
   const formatter = new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: currency,
+    currency: safeCurrency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });

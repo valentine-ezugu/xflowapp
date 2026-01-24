@@ -133,7 +133,8 @@ export default function TransactionDetailsScreen() {
   };
   const statusConfig = STATUS_CONFIG[transaction.status];
   const isPositive = ['TOP_UP_FIAT', 'BUY_XRP', 'DEPOSIT_XRP'].includes(transaction.type);
-  const currencySymbol = getCurrencySymbol(transaction.currency);
+  const hasFiatAmount = transaction.currency && transaction.amount !== null && transaction.amount !== undefined;
+  const currencySymbol = hasFiatAmount ? getCurrencySymbol(transaction.currency) : '';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -155,13 +156,24 @@ export default function TransactionDetailsScreen() {
             <Ionicons name={config.icon} size={32} color={config.color} />
           </View>
           <Text style={styles.transactionLabel}>{config.label}</Text>
-          <Text style={[styles.amount, isPositive ? styles.amountPositive : styles.amountNegative]}>
-            {isPositive ? '+' : '-'}{currencySymbol}{Math.abs(transaction.amount).toFixed(2)}
-          </Text>
-          {transaction.xrpAmount !== null && (
-            <Text style={styles.xrpAmount}>
-              {transaction.xrpAmount > 0 ? '+' : ''}{transaction.xrpAmount.toFixed(4)} XRP
-            </Text>
+          {hasFiatAmount ? (
+            <>
+              <Text style={[styles.amount, isPositive ? styles.amountPositive : styles.amountNegative]}>
+                {isPositive ? '+' : '-'}{currencySymbol}{Math.abs(transaction.amount).toFixed(2)}
+              </Text>
+              {transaction.xrpAmount !== null && (
+                <Text style={styles.xrpAmount}>
+                  {transaction.xrpAmount > 0 ? '+' : ''}{transaction.xrpAmount.toFixed(4)} XRP
+                </Text>
+              )}
+            </>
+          ) : (
+            // Show XRP as primary when no fiat amount
+            transaction.xrpAmount !== null && (
+              <Text style={[styles.amount, isPositive ? styles.amountPositive : styles.amountNegative]}>
+                {isPositive ? '+' : ''}{transaction.xrpAmount.toFixed(4)} XRP
+              </Text>
+            )
           )}
         </View>
 
@@ -192,7 +204,7 @@ export default function TransactionDetailsScreen() {
             />
           )}
 
-          {transaction.rate !== null && (
+          {transaction.rate !== null && hasFiatAmount && (
             <DetailRow
               label="Exchange rate"
               value={`1 XRP = ${currencySymbol}${transaction.rate.toFixed(4)}`}

@@ -16,7 +16,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '@/services/api';
-import { ConversationItem, PaymentConversationResponse, PaymentDetailDto } from '@/types/payment';
+import { ConversationItem, PaymentConversationResponse, PaymentDetailDto, MessageDetailDto } from '@/types/payment';
+import { useConversationWebSocket } from '@/hooks/useWebSocket';
+import { WebSocketEvent } from '@/services/websocket';
 
 export default function CounterpartyConversationScreen() {
   const router = useRouter();
@@ -61,6 +63,91 @@ export default function CounterpartyConversationScreen() {
     }
   }, [userId, address]);
 
+  // Handle real-time WebSocket events
+  const handleWebSocketEvent = useCallback((event: WebSocketEvent) => {
+    console.log('[Conversation] WebSocket event:', event.type);
+
+    switch (event.type) {
+      case 'PAYMENT_RECEIVED':
+      case 'PAYMENT_SENT':
+      case 'REQUEST_RECEIVED':
+      case 'REQUEST_PAID':
+      case 'REQUEST_DECLINED':
+      case 'REQUEST_CANCELLED': {
+        // Add new payment to conversation
+        const payment = event.payload as PaymentDetailDto;
+        const newItem: ConversationItem = {
+          itemType: 'PAYMENT',
+          timestamp: payment.createdAt,
+          sent: payment.sent,
+          payment,
+        };
+        setConversation((prev) => {
+          if (!prev) return prev;
+          // Check if item already exists (avoid duplicates)
+          const existingIndex = prev.items.findIndex(
+            (item) => item.itemType === 'PAYMENT' && item.payment?.id === payment.id
+          );
+          if (existingIndex !== -1) {
+            // Update existing item
+            const updatedItems = [...prev.items];
+            updatedItems[existingIndex] = newItem;
+            return { ...prev, items: updatedItems };
+          }
+          // Add new item at the beginning (newest first)
+          return {
+            ...prev,
+            items: [newItem, ...prev.items],
+          };
+        });
+        // Scroll to see new payment
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+        break;
+      }
+
+      case 'MESSAGE_RECEIVED': {
+        // Add new message to conversation
+        const message = event.payload as MessageDetailDto;
+        const newItem: ConversationItem = {
+          itemType: 'MESSAGE',
+          timestamp: message.createdAt,
+          sent: message.sent,
+          message,
+        };
+        setConversation((prev) => {
+          if (!prev) return prev;
+          // Check if message already exists
+          const exists = prev.items.some(
+            (item) => item.itemType === 'MESSAGE' && item.message?.id === message.id
+          );
+          if (exists) return prev;
+          // Add new item at the beginning
+          return {
+            ...prev,
+            items: [newItem, ...prev.items],
+            unreadCount: prev.unreadCount + 1,
+          };
+        });
+        // Scroll to bottom for new message
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+        break;
+      }
+
+      case 'MESSAGES_READ':
+        // Update read status - refresh conversation
+        loadConversation();
+        break;
+    }
+  }, [loadConversation]);
+
+  // Connect to WebSocket for real-time updates
+  useConversationWebSocket(userId, address, handleWebSocketEvent);
+
+  // Initial load
   useEffect(() => {
     loadConversation();
   }, [loadConversation]);
@@ -72,16 +159,42 @@ export default function CounterpartyConversationScreen() {
   const handleSendMessage = async () => {
     if (!messageText.trim() || isSending || !conversation?.chatEnabled || !userId) return;
 
+    const content = messageText.trim();
     setIsSending(true);
+    setMessageText(''); // Clear immediately for better UX
+
     try {
-      await api.payment.sendMessage({
+      const response = await api.payment.sendMessage({
         recipientId: userId,
-        content: messageText.trim(),
+        content,
       });
-      setMessageText('');
-      await loadConversation();
+      // Optimistically add message to conversation (WebSocket will confirm)
+      const newItem: ConversationItem = {
+        itemType: 'MESSAGE',
+        timestamp: response.createdAt,
+        sent: true,
+        message: {
+          id: response.messageId,
+          sent: true,
+          content: response.content,
+          read: false,
+          createdAt: response.createdAt,
+        },
+      };
+      setConversation((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          items: [newItem, ...prev.items],
+        };
+      });
+      // Scroll to new message
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
     } catch (error) {
       console.error('Failed to send message:', error);
+      setMessageText(content); // Restore message on error
     } finally {
       setIsSending(false);
     }
@@ -122,77 +235,132 @@ export default function CounterpartyConversationScreen() {
 
   const handlePayRequest = async (payment: PaymentDetailDto) => {
     const xrpAmount = parseFloat(payment.xrpAmount) || 0;
-    Alert.alert(
-      'Pay Request',
-      `Pay ${xrpAmount.toFixed(2)} XRP to ${params.displayName}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Pay',
-          onPress: async () => {
-            setIsProcessingRequest(payment.id);
-            try {
-              await api.payment.payRequest({ paymentRequestId: payment.id });
-              await loadConversation();
-            } catch (error: any) {
-              Alert.alert('Error', error.message || 'Failed to pay request');
-            } finally {
-              setIsProcessingRequest(null);
-            }
+    const confirmMessage = `Pay ${xrpAmount.toFixed(2)} XRP to ${params.displayName}?`;
+
+    // Use window.confirm on web, Alert.alert on native
+    if (Platform.OS === 'web') {
+      if (window.confirm(confirmMessage)) {
+        setIsProcessingRequest(payment.id);
+        try {
+          const result = await api.payment.payRequest({ paymentRequestId: payment.id });
+          console.log('Pay request result:', result);
+          // Clear conversation and reload to ensure fresh data
+          setConversation(null);
+          await loadConversation();
+        } catch (error: any) {
+          console.error('Pay request error:', error);
+          window.alert(error.message || 'Failed to pay request');
+        } finally {
+          setIsProcessingRequest(null);
+        }
+      }
+    } else {
+      Alert.alert(
+        'Pay Request',
+        confirmMessage,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Pay',
+            onPress: async () => {
+              setIsProcessingRequest(payment.id);
+              try {
+                await api.payment.payRequest({ paymentRequestId: payment.id });
+                await loadConversation();
+              } catch (error: any) {
+                Alert.alert('Error', error.message || 'Failed to pay request');
+              } finally {
+                setIsProcessingRequest(null);
+              }
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   const handleDeclineRequest = async (payment: PaymentDetailDto) => {
-    Alert.alert(
-      'Decline Request',
-      `Decline payment request from ${params.displayName}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Decline',
-          style: 'destructive',
-          onPress: async () => {
-            setIsProcessingRequest(payment.id);
-            try {
-              await api.payment.declineRequest({ paymentRequestId: payment.id });
-              await loadConversation();
-            } catch (error: any) {
-              Alert.alert('Error', error.message || 'Failed to decline request');
-            } finally {
-              setIsProcessingRequest(null);
-            }
+    const confirmMessage = `Decline payment request from ${params.displayName}?`;
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(confirmMessage)) {
+        setIsProcessingRequest(payment.id);
+        try {
+          await api.payment.declineRequest({ paymentRequestId: payment.id });
+          // Clear conversation and reload to ensure fresh data
+          setConversation(null);
+          await loadConversation();
+        } catch (error: any) {
+          window.alert(error.message || 'Failed to decline request');
+        } finally {
+          setIsProcessingRequest(null);
+        }
+      }
+    } else {
+      Alert.alert(
+        'Decline Request',
+        confirmMessage,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Decline',
+            style: 'destructive',
+            onPress: async () => {
+              setIsProcessingRequest(payment.id);
+              try {
+                await api.payment.declineRequest({ paymentRequestId: payment.id });
+                await loadConversation();
+              } catch (error: any) {
+                Alert.alert('Error', error.message || 'Failed to decline request');
+              } finally {
+                setIsProcessingRequest(null);
+              }
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   const handleCancelRequest = async (payment: PaymentDetailDto) => {
-    Alert.alert(
-      'Cancel Request',
-      'Cancel this payment request?',
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: 'Yes, Cancel',
-          style: 'destructive',
-          onPress: async () => {
-            setIsProcessingRequest(payment.id);
-            try {
-              await api.payment.cancelRequest(payment.id);
-              await loadConversation();
-            } catch (error: any) {
-              Alert.alert('Error', error.message || 'Failed to cancel request');
-            } finally {
-              setIsProcessingRequest(null);
-            }
+    const confirmMessage = 'Cancel this payment request?';
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(confirmMessage)) {
+        setIsProcessingRequest(payment.id);
+        try {
+          await api.payment.cancelRequest(payment.id);
+          await loadConversation();
+        } catch (error: any) {
+          window.alert(error.message || 'Failed to cancel request');
+        } finally {
+          setIsProcessingRequest(null);
+        }
+      }
+    } else {
+      Alert.alert(
+        'Cancel Request',
+        confirmMessage,
+        [
+          { text: 'No', style: 'cancel' },
+          {
+            text: 'Yes, Cancel',
+            style: 'destructive',
+            onPress: async () => {
+              setIsProcessingRequest(payment.id);
+              try {
+                await api.payment.cancelRequest(payment.id);
+                await loadConversation();
+              } catch (error: any) {
+                Alert.alert('Error', error.message || 'Failed to cancel request');
+              } finally {
+                setIsProcessingRequest(null);
+              }
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   const formatTime = (timestamp: string) => {
@@ -288,9 +456,10 @@ export default function CounterpartyConversationScreen() {
 
     if (isRequest) {
       return (
-        <View style={[styles.bubbleContainer, styles.sentContainer]}>
+        <View style={[styles.bubbleContainer, sent ? styles.sentContainer : styles.receivedContainer]}>
           <View style={[
             styles.paymentBubble,
+            sent ? styles.sentPaymentBubble : styles.receivedPaymentBubble,
             (isDeclined || isCancelled) && styles.declinedPaymentBubble,
           ]}>
             {/* Label with arrow */}
@@ -301,10 +470,15 @@ export default function CounterpartyConversationScreen() {
               </Text>
             </View>
 
-            {/* Amount - show XRP prominently */}
+            {/* Amount - XRP first, then fiat */}
             <Text style={styles.paymentAmountText}>
               {xrpAmount.toFixed(2)} XRP
             </Text>
+            {fiatValue > 0 && (
+              <Text style={styles.paymentFiatText}>
+                {currencySymbol}{fiatValue.toFixed(2)}
+              </Text>
+            )}
 
             {/* Note if present */}
             {payment.note && (
@@ -367,30 +541,46 @@ export default function CounterpartyConversationScreen() {
       );
     }
 
-    // Regular payment (not a request) - Revolut style dark bubble
+    // Regular payment (not a request) - bubble on right if sent, left if received
     return (
-      <View style={[styles.bubbleContainer, styles.sentContainer]}>
-        <View style={styles.paymentBubble}>
+      <View style={[styles.bubbleContainer, sent ? styles.sentContainer : styles.receivedContainer]}>
+        <View style={[
+          styles.paymentBubble,
+          sent ? styles.sentPaymentBubble : styles.receivedPaymentBubble,
+        ]}>
           {/* Label with arrow */}
           <View style={styles.paymentLabelRow}>
-            <Ionicons name={sent ? 'arrow-forward' : 'arrow-back'} size={12} color="#888" />
-            <Text style={styles.paymentLabelText}>
+            <Ionicons
+              name={sent ? 'arrow-forward' : 'arrow-back'}
+              size={12}
+              color={sent ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)'}
+            />
+            <Text style={[styles.paymentLabelText, !sent && styles.receivedPaymentLabel]}>
               {sent ? 'You sent' : 'You received'}
             </Text>
           </View>
 
-          {/* Amount - show XRP prominently */}
-          <Text style={styles.paymentAmountText}>
+          {/* Amount - XRP first, then fiat */}
+          <Text style={[styles.paymentAmountText, !sent && styles.receivedPaymentText]}>
             {xrpAmount.toFixed(2)} XRP
           </Text>
+          {fiatValue > 0 && (
+            <Text style={[styles.paymentFiatText, !sent && styles.receivedPaymentFiatText]}>
+              {currencySymbol}{fiatValue.toFixed(2)}
+            </Text>
+          )}
 
           {/* Note if present */}
           {payment.note && (
-            <Text style={styles.paymentNoteText}>{payment.note}</Text>
+            <Text style={[styles.paymentNoteText, !sent && styles.receivedPaymentNote]}>
+              {payment.note}
+            </Text>
           )}
 
           {/* Time */}
-          <Text style={styles.paymentTimeText}>{formatTime(item.timestamp)}</Text>
+          <Text style={[styles.paymentTimeText, !sent && styles.receivedPaymentTime]}>
+            {formatTime(item.timestamp)}
+          </Text>
         </View>
       </View>
     );
@@ -460,6 +650,12 @@ export default function CounterpartyConversationScreen() {
           </View>
         )}
         contentContainerStyle={styles.messagesContent}
+        onLayout={() => {
+          // Scroll to end on initial layout
+          setTimeout(() => {
+            flatListRef.current?.scrollToEnd({ animated: false });
+          }, 100);
+        }}
         onContentSizeChange={() => {
           flatListRef.current?.scrollToEnd({ animated: false });
         }}
@@ -623,8 +819,17 @@ const styles = StyleSheet.create({
   receivedPaymentText: {
     color: '#000',
   },
+  receivedPaymentLabel: {
+    color: 'rgba(0,0,0,0.5)',
+  },
+  receivedPaymentFiatText: {
+    color: 'rgba(0,0,0,0.6)',
+  },
   receivedPaymentNote: {
     color: 'rgba(0,0,0,0.6)',
+  },
+  receivedPaymentTime: {
+    color: 'rgba(0,0,0,0.5)',
   },
   timeText: {
     fontSize: 11,
@@ -664,6 +869,11 @@ const styles = StyleSheet.create({
     fontWeight: '300',
     color: '#fff',
     marginVertical: 4,
+  },
+  paymentFiatText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: -2,
   },
   paymentNoteText: {
     fontSize: 13,
