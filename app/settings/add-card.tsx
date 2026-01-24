@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -14,9 +14,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { CardField, useStripe, CardFieldInput } from '@stripe/stripe-react-native';
 import { api } from '@/services/api';
 import { PaymentProvider, AddCardFlow } from '@/types/settings';
+
+// Note: @stripe/stripe-react-native requires a development build (expo-dev-client)
+// It does NOT work with Expo Go. For Expo Go testing, only Flutterwave flow works.
 
 function formatCardNumber(value: string): string {
   const cleaned = value.replace(/\D/g, '');
@@ -35,12 +37,6 @@ function formatExpiry(value: string): string {
 export default function AddCardScreen() {
   const params = useLocalSearchParams<{ provider: PaymentProvider; addCardFlow: AddCardFlow }>();
   const provider = params.provider;
-  const addCardFlow = params.addCardFlow;
-  const { confirmSetupIntent } = useStripe();
-
-  // Stripe state
-  const [cardDetails, setCardDetails] = useState<CardFieldInput.Details | null>(null);
-  const [stripeClientSecret, setStripeClientSecret] = useState<string | null>(null);
 
   // Flutterwave manual card input state
   const [cardNumber, setCardNumber] = useState('');
@@ -48,35 +44,6 @@ export default function AddCardScreen() {
   const [cvv, setCvv] = useState('');
 
   const [isLoading, setIsLoading] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(true);
-
-  // For Stripe, get the setup intent on mount
-  useEffect(() => {
-    if (provider === 'STRIPE' && addCardFlow === 'SETUP_INTENT') {
-      initStripeSetupIntent();
-    } else {
-      setIsInitializing(false);
-    }
-  }, [provider, addCardFlow]);
-
-  const initStripeSetupIntent = async () => {
-    try {
-      setIsInitializing(true);
-      const response = await api.paymentOption.createSetupIntent();
-      if (response.clientSecret) {
-        setStripeClientSecret(response.clientSecret);
-      } else {
-        Alert.alert('Error', 'Failed to initialize card setup.');
-        router.back();
-      }
-    } catch (error) {
-      console.error('Failed to create setup intent:', error);
-      Alert.alert('Error', 'Failed to initialize card setup. Please try again.');
-      router.back();
-    } finally {
-      setIsInitializing(false);
-    }
-  };
 
   // Flutterwave input handlers
   const handleCardNumberChange = (text: string) => {
@@ -115,38 +82,6 @@ export default function AddCardScreen() {
     return true;
   };
 
-  // STRIPE: Use CardField for input, then confirmSetupIntent
-  const handleAddCardStripe = async () => {
-    if (!stripeClientSecret || !cardDetails?.complete) {
-      Alert.alert('Error', 'Please enter valid card details');
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      // confirmSetupIntent uses the card details from CardField automatically
-      const { error, setupIntent } = await confirmSetupIntent(stripeClientSecret, {
-        paymentMethodType: 'Card',
-      });
-
-      if (error) {
-        console.error('Stripe setup error:', error);
-        Alert.alert('Error', error.message || 'Failed to add card');
-      } else if (setupIntent) {
-        // Success! Backend webhook will save the payment method
-        Alert.alert('Success', 'Card added successfully', [
-          { text: 'OK', onPress: () => router.back() },
-        ]);
-      }
-    } catch (error: any) {
-      console.error('Failed to confirm setup intent:', error);
-      Alert.alert('Error', error.message || 'Failed to add card. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   // FLUTTERWAVE: Send card details directly to backend
   const handleAddCardFlutterwave = async () => {
     if (!validateFlutterwaveForm()) return;
@@ -179,22 +114,39 @@ export default function AddCardScreen() {
   };
 
   const handleAddCard = () => {
-    if (provider === 'STRIPE') {
-      handleAddCardStripe();
-    } else {
+    if (provider === 'FLUTTERWAVE') {
       handleAddCardFlutterwave();
     }
   };
 
-  const isFormValid = provider === 'STRIPE'
-    ? cardDetails?.complete === true
-    : cardNumber.replace(/\s/g, '').length >= 15 && expiry.length === 5 && cvv.length >= 3;
+  const isFormValid = cardNumber.replace(/\s/g, '').length >= 15 && expiry.length === 5 && cvv.length >= 3;
 
-  if (isInitializing) {
+  // Stripe requires development build - show message in Expo Go
+  if (provider === 'STRIPE') {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6C5CE7" />
-        <Text style={styles.loadingText}>Setting up secure card entry...</Text>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Add card</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        <View style={styles.stripeNotAvailable}>
+          <Ionicons name="card-outline" size={64} color="#6C5CE7" />
+          <Text style={styles.stripeTitle}>Stripe Integration</Text>
+          <Text style={styles.stripeMessage}>
+            Stripe card setup requires a development build with expo-dev-client.
+            {'\n\n'}
+            This feature is not available in Expo Go.
+            {'\n\n'}
+            Run `npx expo run:ios` or `npx expo run:android` to test Stripe integration.
+          </Text>
+          <TouchableOpacity style={styles.backButtonLarge} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
@@ -215,92 +167,63 @@ export default function AddCardScreen() {
         style={styles.keyboardView}
       >
         <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-          {provider === 'STRIPE' ? (
-            // STRIPE: Secure CardField component from Stripe SDK
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Card details</Text>
-              <Text style={styles.inputHint}>
-                Enter your card number, expiry date and CVC
-              </Text>
-              <CardField
-                postalCodeEnabled={false}
-                placeholders={{
-                  number: '4242 4242 4242 4242',
-                }}
-                cardStyle={{
-                  backgroundColor: '#111',
-                  textColor: '#fff',
-                  placeholderColor: '#666',
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: '#333',
-                }}
-                style={styles.cardField}
-                onCardChange={(details) => setCardDetails(details)}
+          {/* Card Number */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Card number</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                value={cardNumber}
+                onChangeText={handleCardNumberChange}
+                placeholder="1234 5678 9012 3456"
+                placeholderTextColor="#666"
+                keyboardType="numeric"
+                maxLength={19}
               />
+              <Ionicons name="card-outline" size={20} color="#666" />
             </View>
-          ) : (
-            // FLUTTERWAVE: Manual card input form
-            <>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Card number</Text>
-                <View style={styles.inputContainer}>
-                  <TextInput
-                    style={styles.input}
-                    value={cardNumber}
-                    onChangeText={handleCardNumberChange}
-                    placeholder="1234 5678 9012 3456"
-                    placeholderTextColor="#666"
-                    keyboardType="numeric"
-                    maxLength={19}
-                  />
-                  <Ionicons name="card-outline" size={20} color="#666" />
-                </View>
-              </View>
+          </View>
 
-              <View style={styles.row}>
-                <View style={[styles.inputGroup, styles.halfWidth]}>
-                  <Text style={styles.inputLabel}>Expiry date</Text>
-                  <View style={styles.inputContainer}>
-                    <TextInput
-                      style={styles.input}
-                      value={expiry}
-                      onChangeText={handleExpiryChange}
-                      placeholder="MM/YY"
-                      placeholderTextColor="#666"
-                      keyboardType="numeric"
-                      maxLength={5}
-                    />
-                  </View>
-                </View>
-
-                <View style={[styles.inputGroup, styles.halfWidth]}>
-                  <Text style={styles.inputLabel}>CVV</Text>
-                  <View style={styles.inputContainer}>
-                    <TextInput
-                      style={styles.input}
-                      value={cvv}
-                      onChangeText={handleCvvChange}
-                      placeholder="123"
-                      placeholderTextColor="#666"
-                      keyboardType="numeric"
-                      maxLength={4}
-                      secureTextEntry
-                    />
-                    <Ionicons name="help-circle-outline" size={20} color="#666" />
-                  </View>
-                </View>
+          {/* Expiry and CVV row */}
+          <View style={styles.row}>
+            <View style={[styles.inputGroup, styles.halfWidth]}>
+              <Text style={styles.inputLabel}>Expiry date</Text>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.input}
+                  value={expiry}
+                  onChangeText={handleExpiryChange}
+                  placeholder="MM/YY"
+                  placeholderTextColor="#666"
+                  keyboardType="numeric"
+                  maxLength={5}
+                />
               </View>
-            </>
-          )}
+            </View>
+
+            <View style={[styles.inputGroup, styles.halfWidth]}>
+              <Text style={styles.inputLabel}>CVV</Text>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.input}
+                  value={cvv}
+                  onChangeText={handleCvvChange}
+                  placeholder="123"
+                  placeholderTextColor="#666"
+                  keyboardType="numeric"
+                  maxLength={4}
+                  secureTextEntry
+                />
+                <Ionicons name="help-circle-outline" size={20} color="#666" />
+              </View>
+            </View>
+          </View>
 
           {/* Security note */}
           <View style={styles.securityNote}>
             <Ionicons name="lock-closed" size={16} color="#888" />
             <Text style={styles.securityText}>
-              {provider === 'STRIPE'
-                ? 'Secured by Stripe - card details never touch our servers'
-                : 'Your card details are encrypted and secure'}
+              Your card details are encrypted and secure
             </Text>
           </View>
         </ScrollView>
@@ -328,17 +251,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#000',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#888',
   },
   header: {
     flexDirection: 'row',
@@ -381,11 +293,6 @@ const styles = StyleSheet.create({
     color: '#888',
     marginBottom: 8,
   },
-  inputHint: {
-    fontSize: 13,
-    color: '#666',
-    marginBottom: 12,
-  },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -400,10 +307,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
     paddingVertical: 16,
-  },
-  cardField: {
-    width: '100%',
-    height: 50,
   },
   row: {
     flexDirection: 'row',
@@ -442,5 +345,37 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#000',
+  },
+  // Stripe not available styles
+  stripeNotAvailable: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  stripeTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#fff',
+    marginTop: 16,
+    marginBottom: 12,
+  },
+  stripeMessage: {
+    fontSize: 15,
+    color: '#888',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  backButtonLarge: {
+    marginTop: 32,
+    backgroundColor: '#6C5CE7',
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
 });
