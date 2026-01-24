@@ -52,23 +52,23 @@ export default function PaymentsScreen() {
   };
 
   const handleConversationPress = (item: PaymentCounterpartyDto) => {
-    // Use userId for internal users, address for external
-    // Prefix with 'user:' or 'addr:' to distinguish
-    if (item.isInternalUser && item.userId) {
+    if (item.internalUser && item.userId) {
       router.push({
-        pathname: '/(payments)/[counterpartyId]',
+        pathname: '/(tabs)/(payments)/conversation',
         params: {
-          counterpartyId: `user:${item.userId}`,
-          displayName: item.displayName,
-          xflowTag: item.xflowTag || '',
+          id: String(item.userId),
+          type: 'user',
+          displayName: item.displayName ?? '',
+          xflowTag: item.xflowTag ?? '',
         },
       });
     } else if (item.externalAddress) {
       router.push({
-        pathname: '/(payments)/[counterpartyId]',
+        pathname: '/(tabs)/(payments)/conversation',
         params: {
-          counterpartyId: `addr:${item.externalAddress}`,
-          displayName: item.displayName,
+          id: item.externalAddress,
+          type: 'address',
+          displayName: item.displayName ?? '',
         },
       });
     }
@@ -93,6 +93,22 @@ export default function PaymentsScreen() {
 
   const getLastPaymentPreview = (item: PaymentCounterpartyDto) => {
     const xrpAmount = parseFloat(item.lastPaymentXrp) || 0;
+
+    // Handle REQUEST type payments differently
+    if (item.lastPaymentType === 'REQUEST') {
+      if (item.lastPaymentStatus === 'REQUESTED') {
+        // Pending request
+        if (item.lastPaymentIsMyRequest) {
+          return `You requested ${xrpAmount.toFixed(2)} XRP`;
+        } else {
+          return `Requested ${xrpAmount.toFixed(2)} XRP from you`;
+        }
+      } else if (item.lastPaymentStatus === 'DECLINED') {
+        return `Request declined`;
+      }
+    }
+
+    // Regular payment (sent or received)
     const direction = item.lastPaymentWasSent ? 'You sent' : 'You received';
     return `${direction} ${xrpAmount.toFixed(2)} XRP`;
   };
@@ -108,6 +124,18 @@ export default function PaymentsScreen() {
   };
 
   const getLastPaymentAmount = (item: PaymentCounterpartyDto) => {
+    // For pending requests, show XRP amount instead (fiat might be 0)
+    if (item.lastPaymentType === 'REQUEST' && item.lastPaymentStatus === 'REQUESTED') {
+      const xrpAmount = parseFloat(item.lastPaymentXrp) || 0;
+      if (item.lastPaymentIsMyRequest) {
+        // You requested money, show as pending
+        return `${xrpAmount.toFixed(2)} XRP`;
+      } else {
+        // Someone requested from you
+        return `${xrpAmount.toFixed(2)} XRP`;
+      }
+    }
+
     const fiatValue = parseFloat(item.lastPaymentFiat) || 0;
     const symbol = getCurrencySymbol(item.lastPaymentCurrency);
     const prefix = item.lastPaymentWasSent ? '-' : '+';
@@ -126,6 +154,16 @@ export default function PaymentsScreen() {
   const renderConversationItem = ({ item }: { item: PaymentCounterpartyDto }) => {
     const lastAmount = getLastPaymentAmount(item);
     const initials = item.displayName.charAt(0).toUpperCase();
+    const isPendingRequest = item.lastPaymentType === 'REQUEST' && item.lastPaymentStatus === 'REQUESTED';
+
+    // Determine amount color
+    const getAmountStyle = () => {
+      if (isPendingRequest) {
+        // Pending requests show in orange/warning color
+        return styles.amountPending;
+      }
+      return lastAmount.startsWith('+') ? styles.amountPositive : styles.amountNegative;
+    };
 
     return (
       <TouchableOpacity
@@ -134,7 +172,7 @@ export default function PaymentsScreen() {
       >
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{initials}</Text>
-          {item.isInternalUser && (
+          {item.internalUser && (
             <View style={styles.internalBadge}>
               <Text style={styles.internalBadgeText}>X</Text>
             </View>
@@ -152,15 +190,12 @@ export default function PaymentsScreen() {
           </View>
           <View style={styles.conversationPreview}>
             <Text
-              style={styles.previewText}
+              style={[styles.previewText, isPendingRequest && styles.previewTextPending]}
               numberOfLines={1}
             >
               {getLastPaymentPreview(item)}
             </Text>
-            <Text style={[
-              styles.amountText,
-              lastAmount.startsWith('+') ? styles.amountPositive : styles.amountNegative,
-            ]}>
+            <Text style={[styles.amountText, getAmountStyle()]}>
               {lastAmount}
             </Text>
           </View>
@@ -367,6 +402,12 @@ const styles = StyleSheet.create({
   },
   amountNegative: {
     color: '#fff',
+  },
+  amountPending: {
+    color: '#FFA726',
+  },
+  previewTextPending: {
+    color: '#FFA726',
   },
   unreadBadge: {
     backgroundColor: '#6C5CE7',

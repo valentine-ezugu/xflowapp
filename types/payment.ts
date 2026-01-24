@@ -7,12 +7,15 @@ export interface PaymentCounterpartyDto {
   xflowTag: string | null;            // null for external addresses
   externalAddress: string | null;     // null for internal users
   avatarUrl?: string;
-  isInternalUser: boolean;
+  internalUser: boolean;              // true for xflow users, false for external addresses
   lastPaymentXrp: string;
   lastPaymentFiat: string;
   lastPaymentCurrency: string;
   lastPaymentWasSent: boolean;        // true = you sent, false = you received
   lastPaymentAt: string;
+  lastPaymentType?: PaymentType;      // INTERNAL, EXTERNAL_SEND, EXTERNAL_RECEIVE, REQUEST
+  lastPaymentStatus?: PaymentStatus;  // COMPLETED, PENDING, REQUESTED, etc.
+  lastPaymentIsMyRequest?: boolean;   // For REQUEST: true if current user created the request
 }
 
 // Counterparty in conversation detail view
@@ -40,7 +43,7 @@ export interface PaymentDetailDto {
   id: number;
   type: PaymentType;
   status: PaymentStatus;
-  isSent: boolean;
+  sent: boolean;                      // Java: isSent -> JSON: sent
   xrpAmount: string;                  // Backend returns as string
   fiatValue: string;
   fiatCurrency: string;
@@ -51,14 +54,14 @@ export interface PaymentDetailDto {
   createdAt: string;
   completedAt?: string;
   canRespond: boolean;                // true if you can pay/decline this request
-  isMyRequest: boolean;               // true if you created this request
+  myRequest: boolean;                 // Java: isMyRequest -> JSON: myRequest
   respondedAt?: string;
   fulfilledByPaymentId?: number;
 }
 
 export interface MessageDetailDto {
   id: number;
-  isSent: boolean;
+  sent: boolean;                      // Java: isSent -> JSON: sent
   content: string;
   read: boolean;
   readAt?: string;
@@ -68,7 +71,7 @@ export interface MessageDetailDto {
 export interface ConversationItem {
   itemType: 'PAYMENT' | 'MESSAGE';
   timestamp: string;
-  isSent: boolean;
+  sent: boolean;                      // Java: isSent -> JSON: sent
   payment?: PaymentDetailDto;
   message?: MessageDetailDto;
 }

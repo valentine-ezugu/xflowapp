@@ -34,6 +34,8 @@ export default function RootLayout() {
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="(onboarding)" />
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="(send)" />
+          <Stack.Screen name="(request)" />
           <Stack.Screen name="transaction-details" options={{ headerShown: true, presentation: 'card', title: 'Transaction Details' }} />
           <Stack.Screen name="+not-found" options={{ headerShown: true }} />
         </Stack>

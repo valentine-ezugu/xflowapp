@@ -21,7 +21,8 @@ import { ConversationItem, PaymentConversationResponse, PaymentDetailDto } from 
 export default function CounterpartyConversationScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
-    counterpartyId: string; // Format: 'user:123' or 'addr:rXXX...'
+    id: string; // The userId or address from the URL path
+    type: 'user' | 'address'; // Query param to indicate type
     displayName: string;
     xflowTag?: string;
   }>();
@@ -33,10 +34,10 @@ export default function CounterpartyConversationScreen() {
   const [isProcessingRequest, setIsProcessingRequest] = useState<number | null>(null);
   const flatListRef = useRef<FlatList>(null);
 
-  // Parse the counterpartyId to determine if it's a user or address
-  const isInternalUser = params.counterpartyId?.startsWith('user:');
-  const userId = isInternalUser ? parseInt(params.counterpartyId.replace('user:', ''), 10) : null;
-  const address = !isInternalUser ? params.counterpartyId?.replace('addr:', '') : null;
+  // Parse params - type indicates if it's a user or address
+  const isInternalUser = params.type === 'user';
+  const userId = isInternalUser ? parseInt(params.id, 10) : null;
+  const address = !isInternalUser ? params.id : null;
 
   const loadConversation = useCallback(async () => {
     try {
@@ -243,15 +244,15 @@ export default function CounterpartyConversationScreen() {
 
   const renderMessageBubble = (item: ConversationItem) => {
     if (!item.message) return null;
-    const { message, isSent } = item;
+    const { message, sent } = item;
 
     return (
-      <View style={[styles.bubbleContainer, isSent ? styles.sentContainer : styles.receivedContainer]}>
-        <View style={[styles.messageBubble, isSent ? styles.sentBubble : styles.receivedBubble]}>
-          <Text style={[styles.messageText, isSent ? styles.sentText : styles.receivedText]}>
+      <View style={[styles.bubbleContainer, sent ? styles.sentContainer : styles.receivedContainer]}>
+        <View style={[styles.messageBubble, sent ? styles.sentBubble : styles.receivedBubble]}>
+          <Text style={[styles.messageText, sent ? styles.sentText : styles.receivedText]}>
             {message.content}
           </Text>
-          <Text style={[styles.timeText, isSent ? styles.sentTime : styles.receivedTime]}>
+          <Text style={[styles.timeText, sent ? styles.sentTime : styles.receivedTime]}>
             {formatTime(item.timestamp)}
           </Text>
         </View>
@@ -270,7 +271,7 @@ export default function CounterpartyConversationScreen() {
 
   const renderPaymentBubble = (item: ConversationItem) => {
     if (!item.payment) return null;
-    const { payment, isSent } = item;
+    const { payment, sent } = item;
     const isRequest = payment.type === 'REQUEST';
     const isPending = payment.status === 'REQUESTED';
     const isDeclined = payment.status === 'DECLINED';
@@ -280,10 +281,10 @@ export default function CounterpartyConversationScreen() {
     const fiatValue = parseFloat(payment.fiatValue) || 0;
     const currencySymbol = getCurrencySymbol(payment.fiatCurrency || 'EUR');
 
-    // For requests: isSent means I sent the request (I'm asking for money)
+    // For requests: sent means I sent the request (I'm asking for money)
     // canRespond means I can pay/decline (I received the request)
     const canPayOrDecline = isRequest && isPending && payment.canRespond;
-    const canCancel = isRequest && isPending && payment.isMyRequest;
+    const canCancel = isRequest && isPending && payment.myRequest;
 
     if (isRequest) {
       return (
@@ -294,9 +295,9 @@ export default function CounterpartyConversationScreen() {
           ]}>
             {/* Label with arrow */}
             <View style={styles.paymentLabelRow}>
-              <Ionicons name={isSent ? 'arrow-forward' : 'arrow-back'} size={12} color="#888" />
+              <Ionicons name={sent ? 'arrow-forward' : 'arrow-back'} size={12} color="#888" />
               <Text style={styles.paymentLabelText}>
-                {isSent ? 'You requested' : 'Requested'}
+                {sent ? 'You requested' : 'Requested'}
               </Text>
             </View>
 
@@ -372,9 +373,9 @@ export default function CounterpartyConversationScreen() {
         <View style={styles.paymentBubble}>
           {/* Label with arrow */}
           <View style={styles.paymentLabelRow}>
-            <Ionicons name={isSent ? 'arrow-forward' : 'arrow-back'} size={12} color="#888" />
+            <Ionicons name={sent ? 'arrow-forward' : 'arrow-back'} size={12} color="#888" />
             <Text style={styles.paymentLabelText}>
-              {isSent ? 'You sent' : 'You received'}
+              {sent ? 'You sent' : 'You received'}
             </Text>
           </View>
 
