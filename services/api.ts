@@ -43,6 +43,14 @@ import {
   PayRequestData,
   DeclineRequestData,
 } from '@/types/payment';
+import {
+  AccountDetailsResponse,
+  PaymentOption,
+  PaymentProviderResponse,
+  SetupIntentResponse,
+  AddFlutterwaveCardRequest,
+  AddFlutterwaveCardResponse,
+} from '@/types/settings';
 
 // API Configuration
 // Set to true to use localhost, false to use dev server
@@ -58,11 +66,11 @@ const getApiBaseUrl = (): string => {
     // Localhost URLs by platform
     if (Platform.OS === 'web') {
       return 'http://localhost:8080/api/v1';
-    } else if (Platform.OS === 'android') {
-      return 'http://10.0.2.2:8080/api/v1'; // Android emulator localhost
     } else {
-      // iOS - use your computer's local IP address
-      return 'http://10.202.230.28:8080/api/v1';
+      // For Expo Go on real devices, use your computer's local IP
+      // Find your IP with: ipconfig (Windows) or ifconfig (Mac/Linux)
+      // Make sure your phone is on the same WiFi network
+      return 'http://192.168.1.21:8080/api/v1';
     }
   }
 
@@ -628,6 +636,54 @@ export const countryApi = {
   },
 };
 
+// ============ ACCOUNT API ============
+
+export const accountApi = {
+  /**
+   * Get account details for current user
+   */
+  async getDetails(): Promise<AccountDetailsResponse> {
+    return fetchWithAuth<AccountDetailsResponse>('/account');
+  },
+};
+
+// ============ PAYMENT OPTIONS API ============
+
+export const paymentOptionApi = {
+  /**
+   * Get list of saved payment methods
+   */
+  async getList(): Promise<PaymentOption[]> {
+    return fetchWithAuth<PaymentOption[]>('/payment-option/list');
+  },
+
+  /**
+   * Get payment provider for current user (STRIPE or FLUTTERWAVE)
+   */
+  async getProvider(): Promise<PaymentProviderResponse> {
+    return fetchWithAuth<PaymentProviderResponse>('/payment-option/provider');
+  },
+
+  /**
+   * Create Stripe SetupIntent for adding a card
+   */
+  async createSetupIntent(): Promise<SetupIntentResponse> {
+    return fetchWithAuth<SetupIntentResponse>('/payment-option/setup-intent', {
+      method: 'POST',
+    });
+  },
+
+  /**
+   * Add card via Flutterwave (for African users)
+   */
+  async addFlutterwaveCard(data: AddFlutterwaveCardRequest): Promise<AddFlutterwaveCardResponse> {
+    return fetchWithAuth<AddFlutterwaveCardResponse>('/payment-option/add-card', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
 // ============ EXPORT ALL ============
 
 export const api = {
@@ -639,6 +695,8 @@ export const api = {
   transfer: transferApi,
   payment: paymentApi,
   country: countryApi,
+  account: accountApi,
+  paymentOption: paymentOptionApi,
 };
 
 export default api;

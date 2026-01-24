@@ -101,7 +101,9 @@ class WebSocketService {
         },
         debug: (str) => {
           if (__DEV__) {
-            console.log('[WebSocket]', str);
+            // Hide token in logs for security
+            const sanitized = str.replace(/Bearer [A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+/g, 'Bearer [HIDDEN]');
+            console.log('[WebSocket]', sanitized);
           }
         },
         reconnectDelay: this.reconnectDelay,

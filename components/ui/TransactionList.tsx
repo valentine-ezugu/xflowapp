@@ -53,17 +53,17 @@ function TransactionItem({ transaction }: { transaction: TransactionResponse }) 
         <Text style={styles.transactionSubtitle}>{transaction.subtitle}</Text>
       </View>
       <View style={styles.transactionAmount}>
-        <Text style={[
-          styles.amountText,
-          isPositive ? styles.amountPositive : styles.amountNegative,
-        ]}>
-          {isPositive ? '+' : '-'}{formatAmount(Math.abs(transaction.amount), transaction.currency)}
-        </Text>
-        {transaction.xrpAmount && (
-          <Text style={styles.xrpAmount}>
-            {transaction.xrpAmount > 0 ? '+' : ''}{transaction.xrpAmount.toFixed(2)} XRP
+        {transaction.xrpAmount != null && (
+          <Text style={[
+            styles.xrpAmountMain,
+            isPositive ? styles.amountPositive : styles.amountNegative,
+          ]}>
+            {isPositive ? '+' : ''}{transaction.xrpAmount.toFixed(2)} XRP
           </Text>
         )}
+        <Text style={styles.eurAmount}>
+          {isPositive ? '+' : '-'}{formatAmount(Math.abs(transaction.amount), transaction.currency)}
+        </Text>
       </View>
     </TouchableOpacity>
   );
@@ -192,7 +192,11 @@ const styles = StyleSheet.create({
   amountNegative: {
     color: '#fff',
   },
-  xrpAmount: {
+  xrpAmountMain: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  eurAmount: {
     fontSize: 12,
     color: '#888',
     marginTop: 2,

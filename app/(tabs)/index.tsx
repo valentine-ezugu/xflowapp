@@ -10,6 +10,7 @@ import { DayGroup } from '@/types/transaction';
 import { PortfolioHeader } from '@/components/ui/PortfolioHeader';
 import { KycProgressCard } from '@/components/ui/KycProgressCard';
 import { TransactionList } from '@/components/ui/TransactionList';
+import { SettingsModal } from '@/components/ui/SettingsModal';
 
 export default function HomeScreen() {
   const { user, kycStatus, refreshKycStatus } = useAuth();
@@ -20,6 +21,7 @@ export default function HomeScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showKycCard, setShowKycCard] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
 
   const loadData = useCallback(async (showLoader = true) => {
     try {
@@ -92,7 +94,7 @@ export default function HomeScreen() {
           summary={summary}
           xrpWallet={xrpWallet}
           userTag={user?.xflowTag || undefined}
-          onSettingsPress={() => console.log('Settings')}
+          onSettingsPress={() => setShowSettings(true)}
           onSearchPress={() => console.log('Search')}
           onAddFundsPress={() => console.log('Add Funds')}
           onSendPress={() => router.push('/(send)')}
@@ -119,6 +121,12 @@ export default function HomeScreen() {
           />
         </View>
       </ScrollView>
+
+      {/* Settings Modal */}
+      <SettingsModal
+        visible={showSettings}
+        onClose={() => setShowSettings(false)}
+      />
     </SafeAreaView>
   );
 }

@@ -18,6 +18,7 @@
     "@react-navigation/bottom-tabs": "^7.2.0",
     "@react-navigation/native": "^7.0.14",
     "@stomp/stompjs": "^7.2.1",
+    "@stripe/stripe-react-native": "^0.57.3",
     "@sumsub/react-native-mobilesdk-module": "^1.40.2",
     "expo": "~54.0.0",
     "expo-blur": "~15.0.8",
