@@ -7,7 +7,7 @@ import { tokenStorage } from './api';
 
 // Environment configuration
 const __DEV__ = process.env.NODE_ENV !== 'production';
-const USE_LOCALHOST = true;
+const USE_LOCALHOST = false;
 
 /**
  * Get WebSocket URL based on platform and environment.

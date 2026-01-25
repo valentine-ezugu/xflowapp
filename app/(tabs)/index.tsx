@@ -95,8 +95,7 @@ export default function HomeScreen() {
           xrpWallet={xrpWallet}
           userTag={user?.xflowTag || undefined}
           onSettingsPress={() => setShowSettings(true)}
-          onSearchPress={() => console.log('Search')}
-          onAddFundsPress={() => console.log('Add Funds')}
+          onAddFundsPress={() => router.push('/(add-funds)')}
           onSendPress={() => router.push('/(send)')}
           onReceivePress={() => router.push('/(receive)')}
           onRequestPress={() => router.push('/(request)')}

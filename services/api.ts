@@ -51,10 +51,17 @@ import {
   AddFlutterwaveCardRequest,
   AddFlutterwaveCardResponse,
 } from '@/types/settings';
+import {
+  CreateTopUpIntentRequest,
+  CreateTopUpIntentResponse,
+  BuyXrpQuoteRequest,
+  BuyXrpQuoteResponse,
+  XrpRateInfo,
+} from '@/types/topup';
 
 // API Configuration
 // Set to true to use localhost, false to use dev server
-const USE_LOCALHOST = true;
+const USE_LOCALHOST = false;
 
 const getApiBaseUrl = (): string => {
   if (!__DEV__) {
@@ -684,6 +691,48 @@ export const paymentOptionApi = {
   },
 };
 
+// ============ TOP-UP API ============
+
+export const topUpApi = {
+  /**
+   * Get preview of XRP purchase - shows what user will receive
+   * Includes markup on rate and all fees
+   */
+  async getPreview(data: BuyXrpQuoteRequest): Promise<BuyXrpQuoteResponse> {
+    return fetchWithAuth<BuyXrpQuoteResponse>('/topups/preview', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Create top-up intent - charges saved payment method to add funds
+   * Funds are automatically converted to XRP after successful payment
+   */
+  async createIntent(data: CreateTopUpIntentRequest): Promise<CreateTopUpIntentResponse> {
+    return fetchWithAuth<CreateTopUpIntentResponse>('/topups/intents', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Get XRP to fiat exchange rate (raw market rate, no markup)
+   * @deprecated Use getPreview() instead for accurate buy preview
+   */
+  async getXrpRate(currency: string): Promise<XrpRateInfo> {
+    const response = await fetchWithAuth<string>(`/xrp/rates/xrp-to-fiat?currency=${currency}`);
+    const match = response.match(/1 XRP = ([\d.]+) (\w+)/);
+    if (!match) {
+      throw new Error('Invalid rate format');
+    }
+    return {
+      rate: parseFloat(match[1]),
+      currency: match[2],
+    };
+  },
+};
+
 // ============ EXPORT ALL ============
 
 export const api = {
@@ -697,6 +746,7 @@ export const api = {
   country: countryApi,
   account: accountApi,
   paymentOption: paymentOptionApi,
+  topUp: topUpApi,
 };
 
 export default api;

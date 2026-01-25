@@ -65,6 +65,7 @@ export default function ActivityScreen() {
         <TransactionList
           days={transactions}
           initialCollapsed={false}
+          showHeader={false}
         />
       </ScrollView>
     </SafeAreaView>
@@ -92,6 +93,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flexGrow: 1,
+    paddingHorizontal: 16,
     paddingBottom: 24,
   },
   loadingContainer: {

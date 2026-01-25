@@ -8,6 +8,7 @@ interface TransactionListProps {
   days: DayGroup[];
   initialCollapsed?: boolean;
   maxVisibleDays?: number;
+  showHeader?: boolean;
 }
 
 const TRANSACTION_ICONS: Record<TransactionType, { name: keyof typeof Ionicons.glyphMap; color: string }> = {
@@ -69,7 +70,7 @@ function TransactionItem({ transaction }: { transaction: TransactionResponse }) 
   );
 }
 
-export function TransactionList({ days, initialCollapsed = false, maxVisibleDays = 3 }: TransactionListProps) {
+export function TransactionList({ days, initialCollapsed = false, maxVisibleDays = 3, showHeader = true }: TransactionListProps) {
   const [isExpanded, setIsExpanded] = useState(!initialCollapsed);
 
   if (!days || days.length === 0) {
@@ -87,16 +88,18 @@ export function TransactionList({ days, initialCollapsed = false, maxVisibleDays
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Activity</Text>
-        {hasMore && (
-          <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)}>
-            <Text style={styles.viewAllText}>
-              {isExpanded ? 'Show less' : 'View all'}
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      {showHeader && (
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Activity</Text>
+          {hasMore && (
+            <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)}>
+              <Text style={styles.viewAllText}>
+                {isExpanded ? 'Show less' : 'View all'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       {visibleDays.map((dayGroup) => (
         <View key={dayGroup.date} style={styles.dayGroup}>

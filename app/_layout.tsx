@@ -4,12 +4,18 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import 'react-native-reanimated';
 
 import { AuthProvider } from '@/context/AuthContext';
 
+// Stripe - only import on native platforms (not web)
+let StripeProvider: any = null;
+if (Platform.OS !== 'web') {
+  StripeProvider = require('@stripe/stripe-react-native').StripeProvider;
+}
+
 // Stripe publishable key - should be in env variables in production
-// Note: @stripe/stripe-react-native requires a development build, not Expo Go
 export const STRIPE_PUBLISHABLE_KEY = 'pk_test_51Qf2k5Fp5uEHGwI8QgtiGvgO2pgchHtqV10GTHCqXiK0aeAC3TkyhTNYWJagiseFyf0cflfhog5FCyQXlj8b2tyo00YKrDNyJZ';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -30,7 +36,7 @@ export default function RootLayout() {
     return null;
   }
 
-  return (
+  const appContent = (
     <AuthProvider>
       <ThemeProvider value={DarkTheme}>
         <Stack screenOptions={{ headerShown: false }}>
@@ -48,4 +54,15 @@ export default function RootLayout() {
       </ThemeProvider>
     </AuthProvider>
   );
+
+  // Wrap with StripeProvider on native platforms only
+  if (Platform.OS !== 'web' && StripeProvider) {
+    return (
+      <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
+        {appContent}
+      </StripeProvider>
+    );
+  }
+
+  return appContent;
 }

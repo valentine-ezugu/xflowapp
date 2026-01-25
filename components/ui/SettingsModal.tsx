@@ -7,6 +7,7 @@ import {
   Modal,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
@@ -91,7 +92,7 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Settings</Text>
@@ -140,7 +141,7 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
             showChevron={false}
           />
         </View>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }

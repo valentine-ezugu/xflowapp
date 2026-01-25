@@ -603,7 +603,7 @@ export default function CounterpartyConversationScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.loadingContainer} edges={['top']}>
+      <SafeAreaView style={styles.loadingContainer} edges={['top', 'bottom']}>
         <StatusBar barStyle="light-content" backgroundColor="#000" />
         <ActivityIndicator size="large" color="#6C5CE7" />
       </SafeAreaView>
@@ -615,7 +615,7 @@ export default function CounterpartyConversationScreen() {
   const canRequest = conversation?.requestEnabled && isInternalUser;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
 
       {/* Header */}
