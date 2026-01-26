@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   StatusBar,
   Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -15,11 +16,14 @@ import { useAuth } from '@/context/AuthContext';
 
 // Sumsub SDK - only available on native platforms
 let SNSMobileSDK: any = null;
+let sumsubLoadError: string | null = null;
 if (Platform.OS !== 'web') {
   try {
-    SNSMobileSDK = require('@sumsub/react-native-mobilesdk-module').default;
-  } catch (e) {
+    // Module uses CommonJS exports, not default export
+    SNSMobileSDK = require('@sumsub/react-native-mobilesdk-module');
+  } catch (e: any) {
     console.warn('Sumsub SDK not available:', e);
+    sumsubLoadError = e?.message || 'Failed to load Sumsub SDK. Please rebuild the app.';
   }
 }
 
@@ -39,11 +43,52 @@ export default function VerifyIdentityScreen() {
       }
 
       if (!SNSMobileSDK) {
-        console.error('Sumsub SDK not available');
+        console.error('Sumsub SDK not available:', sumsubLoadError);
+        Alert.alert(
+          'SDK Not Available',
+          sumsubLoadError || 'Sumsub SDK failed to load. Please rebuild the app with: npx expo run:android',
+          [{ text: 'OK' }]
+        );
         return;
       }
 
       setSdkRunning(true);
+
+      // Dark theme configuration to match app style
+      const darkTheme = {
+        colors: {
+          backgroundCommon: '#000000',
+          backgroundNeutral: '#111111',
+          backgroundInfo: '#0d2922',
+          backgroundSuccess: '#0d2922',
+          backgroundWarning: '#2a2000',
+          backgroundCritical: '#2a1515',
+          backgroundCard: '#111111',
+          contentStrong: '#ffffff',
+          contentNeutral: '#888888',
+          contentWeak: '#666666',
+          contentLink: '#00D4AA',
+          contentSuccess: '#00D4AA',
+          contentWarning: '#FFB800',
+          contentCritical: '#FF6B6B',
+          primaryButtonBackground: '#00D4AA',
+          primaryButtonBackgroundHighlighted: '#00B894',
+          primaryButtonBackgroundDisabled: '#1a3d35',
+          primaryButtonContent: '#000000',
+          primaryButtonContentHighlighted: '#000000',
+          primaryButtonContentDisabled: '#666666',
+          secondaryButtonBackground: '#222222',
+          secondaryButtonBackgroundHighlighted: '#333333',
+          secondaryButtonContent: '#ffffff',
+          cameraBackground: '#000000',
+          bottomSheetBackground: '#111111',
+          bottomSheetHandle: '#333333',
+          fieldBackground: '#111111',
+          fieldBorder: '#333333',
+          fieldPlaceholder: '#666666',
+          fieldContent: '#ffffff',
+        },
+      };
 
       // Launch Sumsub SDK
       const snsMobileSDK = SNSMobileSDK.init(accessToken, () => {
@@ -58,7 +103,8 @@ export default function VerifyIdentityScreen() {
             console.log('[Sumsub] Log:', event.message);
           },
         })
-        .withDebug(true)
+        .withTheme(darkTheme)
+        .withDebug(false)
         .build();
 
       const result = await snsMobileSDK.launch();

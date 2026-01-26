@@ -19,8 +19,8 @@ function formatCurrency(amount: number, currency: string): string {
   const formatter = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   });
   return formatter.format(amount);
 }
@@ -174,10 +174,10 @@ const styles = StyleSheet.create({
     color: '#888',
   },
   totalValue: {
-    fontSize: 36,
-    fontWeight: '700',
+    fontSize: 32,
+    fontWeight: '600',
     color: '#fff',
-    letterSpacing: -1,
+    letterSpacing: -0.5,
   },
   xrpRow: {
     flexDirection: 'row',
@@ -186,21 +186,22 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   xrpBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: '#333',
     justifyContent: 'center',
     alignItems: 'center',
   },
   xrpIcon: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     color: '#fff',
   },
   xrpBalance: {
-    fontSize: 14,
-    color: '#888',
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#aaa',
   },
   buttonRow: {
     flexDirection: 'row',
