@@ -64,16 +64,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Clear error
   const clearError = useCallback(() => setError(null), []);
 
   // Handle logout (also used when refresh token fails)
   const logout = useCallback(async () => {
-    // Disconnect WebSocket
-    webSocketService.disconnect();
+    // Prevent multiple simultaneous logout attempts
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
 
-    await api.auth.logout();
+    try {
+      // Disconnect WebSocket
+      webSocketService.disconnect();
+      // Clear tokens
+      await api.auth.logout();
+    } catch (err) {
+      console.error('Error during logout cleanup:', err);
+    }
+
+    // Always update state and navigate, even if cleanup fails
     setState({
       status: 'unauthenticated',
       accessToken: null,
@@ -81,9 +92,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       user: null,
       kycStatus: null,
     });
+
     // Navigate to login
     router.replace('/(auth)/login');
-  }, []);
+    setIsLoggingOut(false);
+  }, [isLoggingOut]);
 
   // Set up token refresh failed callback
   useEffect(() => {

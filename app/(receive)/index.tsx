@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { XrpLogo } from '@/components/icons/XrpLogo';
 import * as Clipboard from 'expo-clipboard';
 import QRCode from 'react-native-qrcode-svg';
 import { api } from '@/services/api';
@@ -131,7 +132,7 @@ export default function ReceiveScreen() {
             {/* XRP Logo overlay */}
             <View style={styles.qrLogoContainer}>
               <View style={styles.qrLogo}>
-                <Text style={styles.qrLogoText}>X</Text>
+                <XrpLogo size={24} color="#000" />
               </View>
             </View>
           </View>

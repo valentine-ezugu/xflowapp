@@ -9,6 +9,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { XrpLogo } from '@/components/icons/XrpLogo';
 
 export default function RequestSuccessScreen() {
   const params = useLocalSearchParams<{
@@ -69,7 +70,7 @@ export default function RequestSuccessScreen() {
         </Text>
         <View style={styles.xrpRow}>
           <View style={styles.xrpBadge}>
-            <Text style={styles.xrpIcon}>✕</Text>
+            <XrpLogo size={12} color="#fff" />
           </View>
           <Text style={styles.xrpAmount}>
             {xrpAmount.toFixed(6)} XRP

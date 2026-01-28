@@ -7,6 +7,10 @@ import {
   StyleSheet,
   StatusBar,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -224,11 +228,18 @@ export default function RequestAmountScreen() {
       : `≈ ${preview ? (numAmount / preview.xrpRate).toFixed(6) : '0'} XRP`;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
 
-      {/* Header */}
-      <View style={styles.header}>
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.dismissArea}>
+            {/* Header */}
+            <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>
           <Ionicons name="chevron-back" size={24} color="#fff" />
         </TouchableOpacity>
@@ -284,26 +295,29 @@ export default function RequestAmountScreen() {
             ))}
           </View>
         ))}
-      </View>
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
 
-      {/* Bottom bar with note and continue */}
-      <View style={styles.bottomBar}>
-        <TextInput
-          style={styles.noteInput}
-          placeholder="Add a note (optional)"
-          placeholderTextColor="#666"
-          value={note}
-          onChangeText={setNote}
-        />
+        {/* Bottom bar with note and continue */}
+        <View style={styles.bottomBar}>
+          <TextInput
+            style={styles.noteInput}
+            placeholder="Add a note (optional)"
+            placeholderTextColor="#666"
+            value={note}
+            onChangeText={setNote}
+          />
 
-        <TouchableOpacity
-          style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
-          onPress={handleContinue}
-          disabled={!canContinue}
-        >
-          <Ionicons name="arrow-forward" size={24} color={canContinue ? '#000' : '#666'} />
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
+            onPress={handleContinue}
+            disabled={!canContinue}
+          >
+            <Ionicons name="arrow-forward" size={24} color={canContinue ? '#000' : '#666'} />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -312,6 +326,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  dismissArea: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',

@@ -5,6 +5,7 @@ export default function RequestLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
+        gestureEnabled: true,
         animation: 'slide_from_right',
       }}
     >

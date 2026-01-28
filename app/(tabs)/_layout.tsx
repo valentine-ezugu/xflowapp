@@ -40,11 +40,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="activity"
+        name="cash-out"
         options={{
-          title: 'Activity',
+          title: 'Cash Out',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="time" color={color} size={size} />
+            <Ionicons name="wallet-outline" color={color} size={size} />
           ),
         }}
       />

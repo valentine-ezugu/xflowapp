@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,12 @@ import {
   StyleSheet,
   Modal,
   Alert,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import * as NavigationBar from 'expo-navigation-bar';
 import { useAuth } from '@/context/AuthContext';
 
 interface SettingsModalProps {
@@ -42,6 +44,13 @@ function SettingsItem({ icon, label, onPress, rightElement, showChevron = true }
 
 export function SettingsModal({ visible, onClose }: SettingsModalProps) {
   const { logout, user } = useAuth();
+
+  useEffect(() => {
+    if (visible && Platform.OS === 'android') {
+      NavigationBar.setBackgroundColorAsync('#000000');
+      NavigationBar.setButtonStyleAsync('light');
+    }
+  }, [visible]);
 
   const handlePaymentMethods = () => {
     onClose();

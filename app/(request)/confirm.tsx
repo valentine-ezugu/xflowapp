@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { XrpLogo } from '@/components/icons/XrpLogo';
 import { api } from '@/services/api';
 
 export default function ConfirmRequestScreen() {
@@ -85,7 +86,7 @@ export default function ConfirmRequestScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
 
       {/* Header */}
@@ -105,7 +106,7 @@ export default function ConfirmRequestScreen() {
         </Text>
         <View style={styles.xrpRow}>
           <View style={styles.xrpBadge}>
-            <Text style={styles.xrpIcon}>✕</Text>
+            <XrpLogo size={12} color="#fff" />
           </View>
           <Text style={styles.amountXrp}>
             {xrpAmount.toFixed(6)} XRP

@@ -10,7 +10,6 @@ import { DayGroup } from '@/types/transaction';
 import { PortfolioHeader } from '@/components/ui/PortfolioHeader';
 import { KycProgressCard } from '@/components/ui/KycProgressCard';
 import { TransactionList } from '@/components/ui/TransactionList';
-import { SettingsModal } from '@/components/ui/SettingsModal';
 
 export default function HomeScreen() {
   const { user, kycStatus, refreshKycStatus } = useAuth();
@@ -21,7 +20,6 @@ export default function HomeScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showKycCard, setShowKycCard] = useState(true);
-  const [showSettings, setShowSettings] = useState(false);
 
   const loadData = useCallback(async (showLoader = true) => {
     try {
@@ -94,7 +92,7 @@ export default function HomeScreen() {
           summary={summary}
           xrpWallet={xrpWallet}
           userTag={user?.xflowTag || undefined}
-          onSettingsPress={() => setShowSettings(true)}
+          onSettingsPress={() => router.push('/settings' as any)}
           onAddFundsPress={() => router.push('/(add-funds)')}
           onSendPress={() => router.push('/(send)')}
           onReceivePress={() => router.push('/(receive)')}
@@ -113,19 +111,9 @@ export default function HomeScreen() {
 
         {/* Transactions list */}
         <View style={styles.section}>
-          <TransactionList
-            days={transactions}
-            initialCollapsed={false}
-            maxVisibleDays={5}
-          />
+          <TransactionList days={transactions} />
         </View>
       </ScrollView>
-
-      {/* Settings Modal */}
-      <SettingsModal
-        visible={showSettings}
-        onClose={() => setShowSettings(false)}
-      />
     </SafeAreaView>
   );
 }

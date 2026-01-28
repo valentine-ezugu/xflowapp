@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useLayoutEffect } from 'react';
 import {
   View,
   Text,
@@ -14,14 +14,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import { api } from '@/services/api';
-import { ConversationItem, PaymentConversationResponse, PaymentDetailDto, MessageDetailDto } from '@/types/payment';
-import { useConversationWebSocket } from '@/hooks/useWebSocket';
-import { WebSocketEvent } from '@/services/websocket';
+import { ConversationItem, PaymentConversationResponse, PaymentDetailDto } from '@/types/payment';
+import { usePayments } from '@/context/PaymentsContext';
 
 export default function CounterpartyConversationScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const params = useLocalSearchParams<{
     id: string; // The userId or address from the URL path
     type: 'user' | 'address'; // Query param to indicate type
@@ -29,132 +32,69 @@ export default function CounterpartyConversationScreen() {
     xflowTag?: string;
   }>();
 
-  const [conversation, setConversation] = useState<PaymentConversationResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Use PaymentsContext for caching
+  const { getConversation, loadConversation: fetchConversation, isLoadingConversation, addMessageToConversation } = usePayments();
+
+  // Hide tab bar when this screen is focused
+  useLayoutEffect(() => {
+    const parent = navigation.getParent();
+    parent?.setOptions({
+      tabBarStyle: { display: 'none' },
+    });
+
+    return () => {
+      parent?.setOptions({
+        tabBarStyle: undefined,
+      });
+    };
+  }, [navigation]);
+
   const [messageText, setMessageText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isProcessingRequest, setIsProcessingRequest] = useState<number | null>(null);
   const flatListRef = useRef<FlatList>(null);
+  const hasInitiallyLoaded = useRef(false);
 
   // Parse params - type indicates if it's a user or address
   const isInternalUser = params.type === 'user';
   const userId = isInternalUser ? parseInt(params.id, 10) : null;
   const address = !isInternalUser ? params.id : null;
 
-  const loadConversation = useCallback(async () => {
-    try {
-      let data: PaymentConversationResponse;
-      if (userId) {
-        data = await api.payment.getConversation(userId);
-        // Mark messages as read for internal users
-        if (data.unreadCount > 0) {
-          api.payment.markAsRead(userId).catch(console.error);
-        }
-      } else if (address) {
-        data = await api.payment.getAddressConversation(address);
-      } else {
-        throw new Error('No userId or address provided');
-      }
-      setConversation(data);
-    } catch (error) {
-      console.error('Failed to load conversation:', error);
-    } finally {
-      setIsLoading(false);
-    }
+  // Get cached conversation immediately
+  const conversation = getConversation(userId, address);
+  const isLoading = isLoadingConversation(userId, address) && !conversation;
+
+  // Reset initial load tracking when conversation changes
+  useEffect(() => {
+    hasInitiallyLoaded.current = false;
   }, [userId, address]);
 
-  // Handle real-time WebSocket events
-  const handleWebSocketEvent = useCallback((event: WebSocketEvent) => {
-    console.log('[Conversation] WebSocket event:', event.type);
-
-    switch (event.type) {
-      case 'PAYMENT_RECEIVED':
-      case 'PAYMENT_SENT':
-      case 'REQUEST_RECEIVED':
-      case 'REQUEST_PAID':
-      case 'REQUEST_DECLINED':
-      case 'REQUEST_CANCELLED': {
-        // Add new payment to conversation
-        const payment = event.payload as PaymentDetailDto;
-        const newItem: ConversationItem = {
-          itemType: 'PAYMENT',
-          timestamp: payment.createdAt,
-          sent: payment.sent,
-          payment,
-        };
-        setConversation((prev) => {
-          if (!prev) return prev;
-          // Check if item already exists (avoid duplicates)
-          const existingIndex = prev.items.findIndex(
-            (item) => item.itemType === 'PAYMENT' && item.payment?.id === payment.id
-          );
-          if (existingIndex !== -1) {
-            // Update existing item
-            const updatedItems = [...prev.items];
-            updatedItems[existingIndex] = newItem;
-            return { ...prev, items: updatedItems };
-          }
-          // Add new item at the beginning (newest first)
-          return {
-            ...prev,
-            items: [newItem, ...prev.items],
-          };
-        });
-        // Scroll to see new payment
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-        break;
-      }
-
-      case 'MESSAGE_RECEIVED': {
-        // Add new message to conversation
-        const message = event.payload as MessageDetailDto;
-        const newItem: ConversationItem = {
-          itemType: 'MESSAGE',
-          timestamp: message.createdAt,
-          sent: message.sent,
-          message,
-        };
-        setConversation((prev) => {
-          if (!prev) return prev;
-          // Check if message already exists
-          const exists = prev.items.some(
-            (item) => item.itemType === 'MESSAGE' && item.message?.id === message.id
-          );
-          if (exists) return prev;
-          // Add new item at the beginning
-          return {
-            ...prev,
-            items: [newItem, ...prev.items],
-            unreadCount: prev.unreadCount + 1,
-          };
-        });
-        // Scroll to bottom for new message
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-        break;
-      }
-
-      case 'MESSAGES_READ':
-        // Update read status - refresh conversation
-        loadConversation();
-        break;
-    }
-  }, [loadConversation]);
-
-  // Connect to WebSocket for real-time updates
-  useConversationWebSocket(userId, address, handleWebSocketEvent);
-
-  // Initial load
+  // Load fresh data in background
   useEffect(() => {
-    loadConversation();
-  }, [loadConversation]);
+    fetchConversation(userId, address);
+  }, [userId, address, fetchConversation]);
+
+  // Helper to reload conversation (for request actions)
+  const reloadConversation = useCallback(async () => {
+    await fetchConversation(userId, address);
+  }, [userId, address, fetchConversation]);
 
   const handleBack = () => {
     router.back();
   };
+
+  const goBack = () => {
+    router.back();
+  };
+
+  // Swipe gesture to go back
+  const swipeGesture = Gesture.Pan()
+    .activeOffsetX(50)
+    .onEnd((event) => {
+      if (event.translationX > 100 && event.velocityX > 0) {
+        runOnJS(goBack)();
+      }
+    });
 
   const handleSendMessage = async () => {
     if (!messageText.trim() || isSending || !conversation?.chatEnabled || !userId) return;
@@ -168,7 +108,7 @@ export default function CounterpartyConversationScreen() {
         recipientId: userId,
         content,
       });
-      // Optimistically add message to conversation (WebSocket will confirm)
+      // Optimistically add message to conversation via context
       const newItem: ConversationItem = {
         itemType: 'MESSAGE',
         timestamp: response.createdAt,
@@ -181,17 +121,7 @@ export default function CounterpartyConversationScreen() {
           createdAt: response.createdAt,
         },
       };
-      setConversation((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          items: [newItem, ...prev.items],
-        };
-      });
-      // Scroll to new message
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+      addMessageToConversation(userId, newItem);
     } catch (error) {
       console.error('Failed to send message:', error);
       setMessageText(content); // Restore message on error
@@ -242,11 +172,8 @@ export default function CounterpartyConversationScreen() {
       if (window.confirm(confirmMessage)) {
         setIsProcessingRequest(payment.id);
         try {
-          const result = await api.payment.payRequest({ paymentRequestId: payment.id });
-          console.log('Pay request result:', result);
-          // Clear conversation and reload to ensure fresh data
-          setConversation(null);
-          await loadConversation();
+          await api.payment.payRequest({ paymentRequestId: payment.id });
+          await reloadConversation();
         } catch (error: any) {
           console.error('Pay request error:', error);
           window.alert(error.message || 'Failed to pay request');
@@ -266,7 +193,7 @@ export default function CounterpartyConversationScreen() {
               setIsProcessingRequest(payment.id);
               try {
                 await api.payment.payRequest({ paymentRequestId: payment.id });
-                await loadConversation();
+                await reloadConversation();
               } catch (error: any) {
                 Alert.alert('Error', error.message || 'Failed to pay request');
               } finally {
@@ -287,9 +214,7 @@ export default function CounterpartyConversationScreen() {
         setIsProcessingRequest(payment.id);
         try {
           await api.payment.declineRequest({ paymentRequestId: payment.id });
-          // Clear conversation and reload to ensure fresh data
-          setConversation(null);
-          await loadConversation();
+          await reloadConversation();
         } catch (error: any) {
           window.alert(error.message || 'Failed to decline request');
         } finally {
@@ -309,7 +234,7 @@ export default function CounterpartyConversationScreen() {
               setIsProcessingRequest(payment.id);
               try {
                 await api.payment.declineRequest({ paymentRequestId: payment.id });
-                await loadConversation();
+                await reloadConversation();
               } catch (error: any) {
                 Alert.alert('Error', error.message || 'Failed to decline request');
               } finally {
@@ -330,7 +255,7 @@ export default function CounterpartyConversationScreen() {
         setIsProcessingRequest(payment.id);
         try {
           await api.payment.cancelRequest(payment.id);
-          await loadConversation();
+          await reloadConversation();
         } catch (error: any) {
           window.alert(error.message || 'Failed to cancel request');
         } finally {
@@ -350,7 +275,7 @@ export default function CounterpartyConversationScreen() {
               setIsProcessingRequest(payment.id);
               try {
                 await api.payment.cancelRequest(payment.id);
-                await loadConversation();
+                await reloadConversation();
               } catch (error: any) {
                 Alert.alert('Error', error.message || 'Failed to cancel request');
               } finally {
@@ -615,72 +540,84 @@ export default function CounterpartyConversationScreen() {
   const canRequest = conversation?.requestEnabled && isInternalUser;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
+    <GestureDetector gesture={swipeGesture}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <StatusBar barStyle="light-content" backgroundColor="#000" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-          <Ionicons name="chevron-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerName}>{params.displayName}</Text>
-          {params.xflowTag && <Text style={styles.headerTag}>{params.xflowTag}</Text>}
-        </View>
-        <View style={styles.headerAvatar}>
-          <Text style={styles.avatarText}>
-            {params.displayName?.charAt(0)?.toUpperCase() || 'U'}
-          </Text>
-        </View>
-      </View>
-
-      {/* Messages */}
-      <FlatList
-        ref={flatListRef}
-        data={groupedItems}
-        keyExtractor={(item, index) => `group-${index}`}
-        renderItem={({ item: group }) => (
-          <View>
-            {renderDateHeader(group.date)}
-            {group.items.map((item: ConversationItem, idx: number) => (
-              <View key={`${item.itemType}-${item.timestamp}-${idx}`}>
-                {renderItem({ item })}
-              </View>
-            ))}
-          </View>
-        )}
-        contentContainerStyle={styles.messagesContent}
-        onLayout={() => {
-          // Scroll to end on initial layout
-          setTimeout(() => {
-            flatListRef.current?.scrollToEnd({ animated: false });
-          }, 100);
-        }}
-        onContentSizeChange={() => {
-          flatListRef.current?.scrollToEnd({ animated: false });
-        }}
-      />
-
-      {/* Action Buttons - Revolut style */}
-      <View style={styles.actionBar}>
-        {canRequest && (
-          <TouchableOpacity style={styles.requestButton} onPress={handleRequestPress}>
-            <Ionicons name="arrow-back" size={16} color="#fff" />
-            <Text style={styles.requestButtonText}>Request</Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity style={[styles.sendActionButton, !canRequest && styles.sendButtonFull]} onPress={handleSendPress}>
-          <Ionicons name="arrow-forward" size={16} color="#000" />
-          <Text style={styles.sendActionButtonText}>Send</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Message Input - only for internal users */}
-      {isInternalUser && (
         <KeyboardAvoidingView
+          style={styles.keyboardAvoidingView}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={0}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+              <Ionicons name="chevron-back" size={24} color="#fff" />
+            </TouchableOpacity>
+            <View style={styles.headerContent}>
+              <Text style={styles.headerName}>{params.displayName}</Text>
+              {params.xflowTag && <Text style={styles.headerTag}>{params.xflowTag}</Text>}
+          </View>
+          <View style={styles.headerAvatar}>
+            <Text style={styles.avatarText}>
+              {params.displayName?.charAt(0)?.toUpperCase() || 'U'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Messages */}
+        <FlatList
+          ref={flatListRef}
+          data={groupedItems}
+          keyExtractor={(item, index) => `group-${index}`}
+          renderItem={({ item: group }) => (
+            <View>
+              {renderDateHeader(group.date)}
+              {group.items.map((item: ConversationItem, idx: number) => (
+                <View key={`${item.itemType}-${item.timestamp}-${idx}`}>
+                  {renderItem({ item })}
+                </View>
+              ))}
+            </View>
+          )}
+          contentContainerStyle={styles.messagesContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          onLayout={() => {
+            // Scroll to end on initial layout (instant, no animation)
+            if (!hasInitiallyLoaded.current) {
+              setTimeout(() => {
+                flatListRef.current?.scrollToEnd({ animated: false });
+                hasInitiallyLoaded.current = true;
+              }, 50);
+            }
+          }}
+          onContentSizeChange={() => {
+            // Only animate scroll for new messages after initial load
+            if (hasInitiallyLoaded.current) {
+              setTimeout(() => {
+                flatListRef.current?.scrollToEnd({ animated: true });
+              }, 50);
+            }
+          }}
+        />
+
+        {/* Action Buttons - Revolut style */}
+        <View style={styles.actionBar}>
+          {canRequest && (
+            <TouchableOpacity style={styles.requestButton} onPress={handleRequestPress}>
+              <Ionicons name="arrow-back" size={16} color="#fff" />
+              <Text style={styles.requestButtonText}>Request</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={[styles.sendActionButton, !canRequest && styles.sendButtonFull]} onPress={handleSendPress}>
+            <Ionicons name="arrow-forward" size={16} color="#000" />
+            <Text style={styles.sendActionButtonText}>Send</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Message Input - only for internal users */}
+        {isInternalUser && (
           <View style={styles.inputContainer}>
             <TextInput
               style={[styles.messageInput, !canChat && styles.messageInputDisabled]}
@@ -710,9 +647,10 @@ export default function CounterpartyConversationScreen() {
               </TouchableOpacity>
             )}
           </View>
+        )}
         </KeyboardAvoidingView>
-      )}
-    </SafeAreaView>
+      </SafeAreaView>
+    </GestureDetector>
   );
 }
 
@@ -720,6 +658,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,

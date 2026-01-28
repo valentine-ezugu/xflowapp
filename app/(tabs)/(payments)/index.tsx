@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,40 +14,24 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { api } from '@/services/api';
+import { usePayments } from '@/context/PaymentsContext';
 import { PaymentCounterpartyDto } from '@/types/payment';
 
 export default function PaymentsScreen() {
-  const [counterparties, setCounterparties] = useState<PaymentCounterpartyDto[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { counterparties, isLoadingList, refreshList } = usePayments();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const loadConversations = useCallback(async (showLoader = true) => {
-    try {
-      if (showLoader) setIsLoading(true);
-      const response = await api.payment.getList();
-      setCounterparties(response.counterparties || []);
-    } catch (error) {
-      console.error('Failed to load conversations:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadConversations();
-  }, [loadConversations]);
-
+  // Refresh in background when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      loadConversations(false);
-    }, [loadConversations])
+      refreshList(false);
+    }, [refreshList])
   );
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await loadConversations(false);
+    await refreshList(false);
     setIsRefreshing(false);
   };
 
@@ -204,7 +188,8 @@ export default function PaymentsScreen() {
     );
   };
 
-  if (isLoading) {
+  // Only show loading on first load when there's no cached data
+  if (isLoadingList && counterparties.length === 0) {
     return (
       <SafeAreaView style={styles.loadingContainer} edges={['top']}>
         <StatusBar barStyle="light-content" backgroundColor="#000" />

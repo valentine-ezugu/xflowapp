@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Plus, PaperPlaneTilt, ArrowDown, HandPalm } from 'phosphor-react-native';
 import { PortfolioSummaryResponse, WalletLine } from '@/types/portfolio';
+import { XrpLogo } from '@/components/icons/XrpLogo';
 
 interface PortfolioHeaderProps {
   summary: PortfolioSummaryResponse | null;
@@ -81,7 +83,7 @@ export function PortfolioHeader({
         </Text>
         <View style={styles.xrpRow}>
           <View style={styles.xrpBadge}>
-            <Text style={styles.xrpIcon}>✕</Text>
+            <XrpLogo size={18} color="#fff" />
           </View>
           <Text style={styles.xrpBalance}>
             {xrpBalance.toFixed(2)} XRP
@@ -89,23 +91,34 @@ export function PortfolioHeader({
         </View>
       </View>
 
-      {/* Action buttons */}
+      {/* Action buttons - Revolut style */}
       <View style={styles.buttonRow}>
-        <TouchableOpacity style={styles.primaryButton} onPress={onAddFundsPress}>
-          <Ionicons name="add" size={18} color="#000" />
-          <Text style={styles.primaryButtonText}>Add Funds</Text>
+        <TouchableOpacity style={styles.actionItem} onPress={onAddFundsPress}>
+          <View style={styles.iconCircle}>
+            <Plus size={24} color="#fff" weight="bold" />
+          </View>
+          <Text style={styles.actionLabel}>Add</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.primaryButton} onPress={onSendPress}>
-          <Ionicons name="arrow-up" size={18} color="#000" />
-          <Text style={styles.primaryButtonText}>Send</Text>
+
+        <TouchableOpacity style={styles.actionItem} onPress={onSendPress}>
+          <View style={styles.iconCircle}>
+            <PaperPlaneTilt size={24} color="#fff" weight="fill" />
+          </View>
+          <Text style={styles.actionLabel}>Send</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryButton} onPress={onReceivePress}>
-          <Ionicons name="arrow-down" size={18} color="#fff" />
-          <Text style={styles.secondaryButtonText}>Receive</Text>
+
+        <TouchableOpacity style={styles.actionItem} onPress={onReceivePress}>
+          <View style={styles.iconCircle}>
+            <ArrowDown size={24} color="#fff" weight="bold" />
+          </View>
+          <Text style={styles.actionLabel}>Receive</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryButton} onPress={onRequestPress}>
-          <Ionicons name="hand-left" size={18} color="#fff" />
-          <Text style={styles.secondaryButtonText}>Request</Text>
+
+        <TouchableOpacity style={styles.actionItem} onPress={onRequestPress}>
+          <View style={styles.iconCircle}>
+            <HandPalm size={24} color="#fff" weight="fill" />
+          </View>
+          <Text style={styles.actionLabel}>Request</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -186,9 +199,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   xrpBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: '#333',
     justifyContent: 'center',
     alignItems: 'center',
@@ -205,36 +218,23 @@ const styles = StyleSheet.create({
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: 10,
+    justifyContent: 'space-between',
   },
-  primaryButton: {
-    flex: 1,
-    flexDirection: 'row',
+  actionItem: {
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#00D4AA',
-    paddingVertical: 14,
-    borderRadius: 12,
+    gap: 8,
   },
-  primaryButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#000',
-  },
-  secondaryButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
+  iconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: '#222',
-    paddingVertical: 14,
-    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  secondaryButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#fff',
+  actionLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#888',
   },
 });

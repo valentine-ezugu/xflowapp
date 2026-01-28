@@ -12,6 +12,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import { api } from '@/services/api';
 import { TransactionResponse, TransactionType, TransactionStatus } from '@/types/transaction';
 
@@ -99,6 +101,19 @@ export default function TransactionDetailsScreen() {
     router.back();
   };
 
+  const goBack = () => {
+    router.back();
+  };
+
+  // Swipe gesture to go back
+  const swipeGesture = Gesture.Pan()
+    .activeOffsetX(50)
+    .onEnd((event) => {
+      if (event.translationX > 100 && event.velocityX > 0) {
+        runOnJS(goBack)();
+      }
+    });
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.loadingContainer} edges={['top']}>
@@ -137,19 +152,18 @@ export default function TransactionDetailsScreen() {
   const currencySymbol = hasFiatAmount ? getCurrencySymbol(transaction.currency) : '';
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
+    <GestureDetector gesture={swipeGesture}>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle="light-content" backgroundColor="#000" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-          <Ionicons name="chevron-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Transaction details</Text>
-        <View style={styles.placeholder} />
-      </View>
+        {/* Close Button */}
+        <View style={styles.closeButtonContainer}>
+          <TouchableOpacity style={styles.closeButton} onPress={handleBack}>
+            <Ionicons name="close" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         {/* Icon and Amount */}
         <View style={styles.heroSection}>
           <View style={[styles.iconContainer, { backgroundColor: `${config.color}20` }]}>
@@ -267,8 +281,9 @@ export default function TransactionDetailsScreen() {
             <Text style={styles.explorerButtonText}>View on XRPL Explorer</Text>
           </TouchableOpacity>
         )}
-      </ScrollView>
-    </SafeAreaView>
+        </ScrollView>
+      </SafeAreaView>
+    </GestureDetector>
   );
 }
 
@@ -295,6 +310,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  closeButtonContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#222',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   loadingContainer: {
     flex: 1,

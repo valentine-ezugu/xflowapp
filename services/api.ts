@@ -58,6 +58,13 @@ import {
   BuyXrpQuoteResponse,
   XrpRateInfo,
 } from '@/types/topup';
+import {
+  TransakCashoutRequest,
+  TransakCashoutResponse,
+  FlutterwaveCashoutRequest,
+  FlutterwaveCashoutResponse,
+  CashoutProviderResponse,
+} from '@/types/cashout';
 
 // API Configuration
 // Set to true to use localhost, false to use dev server
@@ -188,8 +195,8 @@ async function fetchWithAuth<T>(
     headers,
   });
 
-  // Handle 401 - try refresh token
-  if (response.status === 401 && requiresAuth) {
+  // Handle 401/403 - try refresh token for auth errors
+  if ((response.status === 401 || response.status === 403) && requiresAuth) {
     const refreshed = await tryRefreshToken();
     if (refreshed) {
       // Retry with new token
@@ -199,6 +206,12 @@ async function fetchWithAuth<T>(
         ...options,
         headers,
       });
+
+      // If still 401/403 after refresh, token is truly invalid
+      if (response.status === 401 || response.status === 403) {
+        onTokenRefreshFailed?.();
+        throw new ApiError(response.status, 'Session expired. Please login again.');
+      }
     } else {
       // Refresh failed, trigger logout
       onTokenRefreshFailed?.();
@@ -733,6 +746,58 @@ export const topUpApi = {
   },
 };
 
+// ============ CASHOUT API ============
+
+export const cashoutApi = {
+  /**
+   * Get cashout provider for current user based on country of residence
+   * Returns TRANSAK (Europe) or FLUTTERWAVE (Africa)
+   */
+  async getProvider(): Promise<CashoutProviderResponse> {
+    return fetchWithAuth<CashoutProviderResponse>('/cashout/provider');
+  },
+
+  /**
+   * Initiate XRP sell via Transak (Europe)
+   * Returns widget URL to open in WebView
+   * XRP is NOT debited until user completes the widget
+   */
+  async initiateTransak(data: TransakCashoutRequest): Promise<TransakCashoutResponse> {
+    return fetchWithAuth<TransakCashoutResponse>('/cashout/transak', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Initiate XRP sell via Flutterwave (Africa)
+   * XRP is debited and fiat sent to linked bank/mobile money
+   */
+  async initiateFlutterwave(data: FlutterwaveCashoutRequest): Promise<FlutterwaveCashoutResponse> {
+    return fetchWithAuth<FlutterwaveCashoutResponse>('/cashout/flutterwave', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Process Transak wallet redirect (called after user completes widget)
+   * This triggers the on-chain XRP transfer to Transak
+   */
+  async processTransakRedirect(params: {
+    partnerOrderId: string;
+    walletAddress: string;
+    orderId?: string;
+    cryptoAmount?: number;
+    fiatAmount?: number;
+  }): Promise<void> {
+    return fetchWithAuth<void>('/transak/wallet-redirect', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  },
+};
+
 // ============ EXPORT ALL ============
 
 export const api = {
@@ -747,6 +812,7 @@ export const api = {
   account: accountApi,
   paymentOption: paymentOptionApi,
   topUp: topUpApi,
+  cashout: cashoutApi,
 };
 
 export default api;

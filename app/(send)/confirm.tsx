@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { XrpLogo } from '@/components/icons/XrpLogo';
 import { api } from '@/services/api';
 import { SendXrpResponse } from '@/types/transfer';
 
@@ -131,7 +132,7 @@ export default function ConfirmSendScreen() {
         </Text>
         <View style={styles.xrpRow}>
           <View style={styles.xrpBadge}>
-            <Text style={styles.xrpIcon}>✕</Text>
+            <XrpLogo size={12} color="#fff" />
           </View>
           <Text style={styles.amountXrp}>
             {recipientGetsXrp.toFixed(4)} XRP

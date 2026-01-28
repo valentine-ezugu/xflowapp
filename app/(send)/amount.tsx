@@ -8,11 +8,16 @@ import {
   StatusBar,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { XrpLogo } from '@/components/icons/XrpLogo';
 import { api } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 import { SendPreviewResponse } from '@/types/transfer';
@@ -291,126 +296,136 @@ export default function SendAmountScreen() {
       : `≈ ${preview ? preview.recipientGetsXrp.toFixed(6) : '0'} XRP`;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-          <Ionicons name="chevron-back" size={24} color="#fff" />
-        </TouchableOpacity>
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.dismissArea}>
+            {/* Header */}
+            <View style={styles.header}>
+              <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+                <Ionicons name="chevron-back" size={24} color="#fff" />
+              </TouchableOpacity>
 
-        <View style={styles.recipientBadge}>
-          {isExternalWallet ? (
-            <View style={[styles.recipientAvatar, styles.walletAvatar]}>
-              <Ionicons name="wallet" size={14} color="#fff" />
-            </View>
-          ) : (
-            <View style={styles.recipientAvatar}>
-              <Text style={styles.avatarText}>
-                {recipientName.charAt(0)?.toUpperCase() || 'X'}
-              </Text>
-            </View>
-          )}
-          <Text style={styles.recipientName}>{recipientName}</Text>
-        </View>
-
-        <View style={styles.placeholder} />
-      </View>
-
-      {/* Amount Display */}
-      <View style={styles.amountContainer}>
-        <TouchableOpacity style={styles.amountRow} onPress={handleToggleMode}>
-          <Text style={styles.currencySymbol}>
-            {inputMode === 'fiat' ? currencySymbol : ''}
-          </Text>
-          <Text style={styles.amountText}>{amount}</Text>
-          {inputMode === 'xrp' && <Text style={styles.xrpLabel}> XRP</Text>}
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.secondaryRow} onPress={handleToggleMode}>
-          <Ionicons name="swap-vertical" size={16} color="#888" />
-          {isLoadingPreview ? (
-            <ActivityIndicator size="small" color="#888" style={styles.loadingIndicator} />
-          ) : (
-            <Text style={styles.secondaryText}>{displaySecondary}</Text>
-          )}
-        </TouchableOpacity>
-
-        {/* Error line (MoonPay-style) */}
-        {errorText && <Text style={styles.errorText}>{errorText}</Text>}
-
-        {/* Max Button */}
-        <TouchableOpacity style={styles.maxButton} onPress={handleMaxPress}>
-          <Text style={styles.maxButtonText}>Max</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Wallet selector (showing balance) */}
-      <View style={styles.walletSelector}>
-        <View style={styles.walletInfo}>
-          <View style={styles.xrpIcon}>
-            <Text style={styles.xrpIconText}>✕</Text>
-          </View>
-          <View>
-            <Text style={styles.walletLabel}>XRP</Text>
-            <Text style={styles.walletNetwork}>XRP • XRPL</Text>
-          </View>
-        </View>
-
-        <View style={styles.walletBalance}>
-          <Text style={styles.balanceAmount}>
-            {currencySymbol}
-            {preview ? (preview.spendableXrp * preview.xrpRate).toFixed(2) : '0.00'}
-          </Text>
-          <Text style={styles.balanceXrp}>
-            {preview ? preview.spendableXrp.toFixed(6) : '0'} XRP
-          </Text>
-        </View>
-
-        <Ionicons name="chevron-forward" size={20} color="#666" />
-      </View>
-
-      {/* Number Pad */}
-      <View style={styles.numberPad}>
-        {NUMBER_PAD.map((row, rowIndex) => (
-          <View key={rowIndex} style={styles.numberRow}>
-            {row.map((key) => (
-              <TouchableOpacity
-                key={key}
-                style={styles.numberKey}
-                onPress={() => handleKeyPress(key)}
-              >
-                {key === 'backspace' ? (
-                  <Ionicons name="backspace-outline" size={24} color="#fff" />
+              <View style={styles.recipientBadge}>
+                {isExternalWallet ? (
+                  <View style={[styles.recipientAvatar, styles.walletAvatar]}>
+                    <Ionicons name="wallet" size={14} color="#fff" />
+                  </View>
                 ) : (
-                  <Text style={styles.numberKeyText}>{key}</Text>
+                  <View style={styles.recipientAvatar}>
+                    <Text style={styles.avatarText}>
+                      {recipientName.charAt(0)?.toUpperCase() || 'X'}
+                    </Text>
+                  </View>
+                )}
+                <Text style={styles.recipientName}>{recipientName}</Text>
+              </View>
+
+              <View style={styles.placeholder} />
+            </View>
+
+            {/* Amount Display */}
+            <View style={styles.amountContainer}>
+              <TouchableOpacity style={styles.amountRow} onPress={handleToggleMode}>
+                <Text style={styles.currencySymbol}>
+                  {inputMode === 'fiat' ? currencySymbol : ''}
+                </Text>
+                <Text style={styles.amountText}>{amount}</Text>
+                {inputMode === 'xrp' && <Text style={styles.xrpLabel}> XRP</Text>}
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.secondaryRow} onPress={handleToggleMode}>
+                <Ionicons name="swap-vertical" size={16} color="#888" />
+                {isLoadingPreview ? (
+                  <ActivityIndicator size="small" color="#888" style={styles.loadingIndicator} />
+                ) : (
+                  <Text style={styles.secondaryText}>{displaySecondary}</Text>
                 )}
               </TouchableOpacity>
-            ))}
+
+              {/* Error line (MoonPay-style) */}
+              {errorText && <Text style={styles.errorText}>{errorText}</Text>}
+
+              {/* Max Button */}
+              <TouchableOpacity style={styles.maxButton} onPress={handleMaxPress}>
+                <Text style={styles.maxButtonText}>Max</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Wallet selector (showing balance) */}
+            <View style={styles.walletSelector}>
+              <View style={styles.walletInfo}>
+                <View style={styles.xrpIcon}>
+                  <XrpLogo size={18} color="#fff" />
+                </View>
+                <View>
+                  <Text style={styles.walletLabel}>XRP</Text>
+                  <Text style={styles.walletNetwork}>XRP • XRPL</Text>
+                </View>
+              </View>
+
+              <View style={styles.walletBalance}>
+                <Text style={styles.balanceAmount}>
+                  {currencySymbol}
+                  {preview ? (preview.spendableXrp * preview.xrpRate).toFixed(2) : '0.00'}
+                </Text>
+                <Text style={styles.balanceXrp}>
+                  {preview ? preview.spendableXrp.toFixed(6) : '0'} XRP
+                </Text>
+              </View>
+
+              <Ionicons name="chevron-forward" size={20} color="#666" />
+            </View>
+
+            {/* Number Pad */}
+            <View style={styles.numberPad}>
+              {NUMBER_PAD.map((row, rowIndex) => (
+                <View key={rowIndex} style={styles.numberRow}>
+                  {row.map((key) => (
+                    <TouchableOpacity
+                      key={key}
+                      style={styles.numberKey}
+                      onPress={() => handleKeyPress(key)}
+                    >
+                      {key === 'backspace' ? (
+                        <Ionicons name="backspace-outline" size={24} color="#fff" />
+                      ) : (
+                        <Text style={styles.numberKeyText}>{key}</Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ))}
+            </View>
           </View>
-        ))}
-      </View>
+        </TouchableWithoutFeedback>
 
-      {/* Note / Destination Tag Input */}
-      <View style={styles.noteContainer}>
-        <TextInput
-          style={styles.noteInput}
-          placeholder={isExternalWallet ? 'Ripple memo tag' : 'Add a note'}
-          placeholderTextColor="#666"
-          value={isExternalWallet ? destinationTag : note}
-          onChangeText={isExternalWallet ? setDestinationTag : setNote}
-          keyboardType={isExternalWallet ? 'number-pad' : 'default'}
-        />
+        {/* Note / Destination Tag Input */}
+        <View style={styles.noteContainer}>
+          <TextInput
+            style={styles.noteInput}
+            placeholder={isExternalWallet ? 'Ripple memo tag' : 'Add a note'}
+            placeholderTextColor="#666"
+            value={isExternalWallet ? destinationTag : note}
+            onChangeText={isExternalWallet ? setDestinationTag : setNote}
+            keyboardType={isExternalWallet ? 'number-pad' : 'default'}
+          />
 
-        <TouchableOpacity
-          style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
-          onPress={handleContinue}
-          disabled={!canContinue}
-        >
-          <Ionicons name="arrow-forward" size={24} color={canContinue ? '#000' : '#666'} />
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
+            onPress={handleContinue}
+            disabled={!canContinue}
+          >
+            <Ionicons name="arrow-forward" size={24} color={canContinue ? '#000' : '#666'} />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -419,6 +434,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  dismissArea: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
